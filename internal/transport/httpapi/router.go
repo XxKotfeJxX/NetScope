@@ -53,9 +53,10 @@ func NewRouter(deps Dependencies) http.Handler {
 	api := apiHandler{
 		runs: deps.Runs, events: deps.Events, version: deps.Version, runtime: deps.Runtime,
 	}
+	limiter := newRateLimiter(10, time.Minute)
 	router.Route("/api/v1", func(router chi.Router) {
 		router.Get("/capabilities", api.capabilities)
-		router.Post("/runs", api.createRun)
+		router.With(limiter.middleware).Post("/runs", api.createRun)
 		router.Get("/runs", api.listRuns)
 		router.Get("/runs/{id}", api.getRun)
 		router.Post("/runs/{id}/cancel", api.cancelRun)

@@ -144,7 +144,8 @@ func (m *Manager) execute(runID uuid.UUID) error {
 		return fmt.Errorf("parse stored target: %w", err)
 	}
 	run.Target = parsedTarget
-	runContext, cancel := context.WithCancel(m.rootContext)
+	runTimeout := time.Duration(run.Options.TimeoutMS) * time.Millisecond
+	runContext, cancel := context.WithTimeout(m.rootContext, runTimeout)
 	m.activeMutex.Lock()
 	m.active[runID] = cancel
 	m.activeMutex.Unlock()
