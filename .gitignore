@@ -1,0 +1,25 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Local tools and editor state
+.tools/
+.idea/
+.vscode/
+*.swp
+
+# Go
+bin/
+coverage.out
+*.test
+
+# Frontend
+web/node_modules/
+web/dist/
+web/coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
+
