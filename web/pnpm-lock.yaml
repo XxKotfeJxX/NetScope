@@ -7,6 +7,9 @@ settings:
 importers:
   .:
     dependencies:
+      "@hookform/resolvers":
+        specifier: ^5.2.0
+        version: 5.4.0(react-hook-form@7.82.0(react@19.2.8))
       "@tanstack/react-query":
         specifier: ^5.90.0
         version: 5.101.4(react@19.2.8)
@@ -19,6 +22,9 @@ importers:
       react-dom:
         specifier: ^19.2.0
         version: 19.2.8(react@19.2.8)
+      react-hook-form:
+        specifier: ^7.71.0
+        version: 7.82.0(react@19.2.8)
       react-router-dom:
         specifier: ^7.9.0
         version: 7.18.1(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -621,6 +627,14 @@ packages:
       "@noble/hashes":
         optional: true
 
+  "@hookform/resolvers@5.4.0":
+    resolution:
+      {
+        integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==,
+      }
+    peerDependencies:
+      react-hook-form: ^7.55.0
+
   "@humanfs/core@0.19.2":
     resolution:
       {
@@ -897,6 +911,12 @@ packages:
     resolution:
       {
         integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==,
+      }
+
+  "@standard-schema/utils@0.3.0":
+    resolution:
+      {
+        integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==,
       }
 
   "@tanstack/query-core@5.101.4":
@@ -2064,6 +2084,15 @@ packages:
     peerDependencies:
       react: ^19.2.8
 
+  react-hook-form@7.82.0:
+    resolution:
+      {
+        integrity: sha512-Zw/uFZ2dO+02GHlBn7JFGn8kZJ7LdM33B/0BXOovzFay+CMhf94JMw5BVu+F1tVkUKjNvBuaE3fz5BJhga10Tg==,
+      }
+    engines: { node: ">=18.0.0" }
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18 || ^19
+
   react-is@17.0.2:
     resolution:
       {
@@ -2833,6 +2862,11 @@ snapshots:
 
   "@exodus/bytes@1.15.1": {}
 
+  "@hookform/resolvers@5.4.0(react-hook-form@7.82.0(react@19.2.8))":
+    dependencies:
+      "@standard-schema/utils": 0.3.0
+      react-hook-form: 7.82.0(react@19.2.8)
+
   "@humanfs/core@0.19.2":
     dependencies:
       "@humanfs/types": 0.15.0
@@ -2946,6 +2980,8 @@ snapshots:
     optional: true
 
   "@standard-schema/spec@1.1.0": {}
+
+  "@standard-schema/utils@0.3.0": {}
 
   "@tanstack/query-core@5.101.4": {}
 
@@ -3670,6 +3706,10 @@ snapshots:
     dependencies:
       react: 19.2.8
       scheduler: 0.27.0
+
+  react-hook-form@7.82.0(react@19.2.8):
+    dependencies:
+      react: 19.2.8
 
   react-is@17.0.2: {}
 
