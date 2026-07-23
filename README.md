@@ -9,16 +9,19 @@ diagnostic checks with bounded concurrency, per-check timeouts, cancellation,
 and live progress. It is a diagnostics dashboard—not a subnet scanner,
 vulnerability scanner, packet sniffer, or Nmap replacement.
 
-> Current release: **v0.0.1 bootstrap**. API health, PostgreSQL readiness, the
-> React application shell, containers, and CI are operational. The DNS
-> vertical slice is being developed on `dev`.
+> `main` currently contains the **v0.0.1 bootstrap**. The `dev` branch contains
+> the first complete vertical slice: target input → persisted run → worker →
+> DNS lookup → SSE progress → browser result.
 
 ## Features
 
 - Go `net/http` API with chi routing and graceful shutdown
 - PostgreSQL 18.4 connection pooling through pgx
 - Structured JSON logs with request IDs
-- Responsive React 19 + TypeScript dashboard shell
+- DNS A, AAAA, CNAME, MX, NS, TXT, and PTR inspection
+- Bounded run workers, per-probe timeout, cancellation, and SSE events
+- Persisted run details, history, and JSON export
+- Responsive React 19 + TypeScript diagnostic dashboard
 - Docker Compose for database-only or full-stack development
 - Backend and frontend test, lint, typecheck, race, and build checks
 
@@ -112,9 +115,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
 ## Known limitations
 
-The bootstrap release exposes health/readiness endpoints and the UI shell. DNS,
-TCP, HTTP, TLS, SSE, saved runs, and exports belong to the v0.1.0 milestone.
-Public SSRF policy enforcement must be complete before internet deployment.
+The current `dev` build implements the first DNS vertical slice. TCP, HTTP, and
+TLS probes are visibly disabled until their implementations land. Public mode
+validates resolved addresses before the DNS run; rebinding-safe custom dialers
+remain required before HTTP/TLS checks can be exposed publicly.
 
 ## Roadmap
 
@@ -126,4 +130,3 @@ Public SSRF policy enforcement must be complete before internet deployment.
 ## License
 
 [MIT](LICENSE)
-
