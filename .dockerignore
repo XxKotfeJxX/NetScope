@@ -1,0 +1,9 @@
+.git
+.github
+.tools
+.env
+web
+coverage.out
+netscope
+netscope.exe
+
