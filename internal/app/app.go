@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/storage/postgres"
 	"github.com/XxKotfeJxX/netscope/internal/transport/httpapi"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -25,6 +26,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("parse DATABASE_URL: %w", err)
 	}
 	poolConfig.MaxConns = 10
+
+	migrationCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	if err := postgres.Migrate(migrationCtx, poolConfig); err != nil {
+		return nil, err
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
