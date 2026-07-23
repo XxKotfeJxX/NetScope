@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -20,6 +21,17 @@ type Dependencies struct {
 	Pool      *pgxpool.Pool
 	Version   string
 	WebOrigin string
+	Runs      *diagnostics.Service
+	Events    diagnostics.EventPublisher
+	Runtime   RuntimeInfo
+}
+
+type RuntimeInfo struct {
+	DefaultTimeoutMS int    `json:"defaultTimeoutMs"`
+	MaxTimeoutMS     int    `json:"maxTimeoutMs"`
+	RunWorkers       int    `json:"runWorkers"`
+	ProbeConcurrency int    `json:"probeConcurrency"`
+	NetworkPolicy    string `json:"networkPolicy"`
 }
 
 type healthHandler struct {
@@ -37,6 +49,19 @@ func NewRouter(deps Dependencies) http.Handler {
 	health := healthHandler{pool: deps.Pool, version: deps.Version}
 	router.Get("/healthz", health.live)
 	router.Get("/readyz", health.ready)
+
+	api := apiHandler{
+		runs: deps.Runs, events: deps.Events, version: deps.Version, runtime: deps.Runtime,
+	}
+	router.Route("/api/v1", func(router chi.Router) {
+		router.Get("/capabilities", api.capabilities)
+		router.Post("/runs", api.createRun)
+		router.Get("/runs", api.listRuns)
+		router.Get("/runs/{id}", api.getRun)
+		router.Post("/runs/{id}/cancel", api.cancelRun)
+		router.Get("/runs/{id}/events", api.runEvents)
+		router.Get("/runs/{id}/export", api.exportRun)
+	})
 
 	return router
 }
@@ -73,6 +98,12 @@ type responseRecorder struct {
 func (r *responseRecorder) WriteHeader(status int) {
 	r.status = status
 	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *responseRecorder) Flush() {
+	if flusher, ok := r.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
 }
 
 func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {

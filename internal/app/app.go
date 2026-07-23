@@ -8,16 +8,20 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	dnsprobe "github.com/XxKotfeJxX/netscope/internal/probe/dns"
 	"github.com/XxKotfeJxX/netscope/internal/storage/postgres"
+	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/XxKotfeJxX/netscope/internal/transport/httpapi"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type App struct {
-	config Config
-	logger *slog.Logger
-	pool   *pgxpool.Pool
-	server *http.Server
+	config  Config
+	logger  *slog.Logger
+	pool    *pgxpool.Pool
+	manager *diagnostics.Manager
+	server  *http.Server
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
@@ -38,11 +42,45 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		return nil, fmt.Errorf("create PostgreSQL pool: %w", err)
 	}
 
+	repository := postgres.NewRunRepository(pool)
+	events := diagnostics.NewHub()
+	manager := diagnostics.NewManager(
+		repository,
+		events,
+		logger,
+		cfg.RunWorkers,
+		cfg.RunQueueSize,
+		cfg.ProbeConcurrency,
+		dnsprobe.New(nil),
+	)
+	manager.Start()
+	service := diagnostics.NewService(
+		repository,
+		manager,
+		target.Policy{
+			Public:         cfg.NetworkPolicy == "public",
+			AllowLoopback:  cfg.AllowLoopback,
+			AllowPrivate:   cfg.AllowPrivate,
+			AllowLinkLocal: cfg.AllowLinkLocal,
+		},
+		cfg.DefaultProbeTimeout,
+		cfg.MaxProbeTimeout,
+	)
+
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		Logger:    logger,
 		Pool:      pool,
 		Version:   cfg.Version,
 		WebOrigin: cfg.WebOrigin,
+		Runs:      service,
+		Events:    events,
+		Runtime: httpapi.RuntimeInfo{
+			DefaultTimeoutMS: int(cfg.DefaultProbeTimeout.Milliseconds()),
+			MaxTimeoutMS:     int(cfg.MaxProbeTimeout.Milliseconds()),
+			RunWorkers:       cfg.RunWorkers,
+			ProbeConcurrency: cfg.ProbeConcurrency,
+			NetworkPolicy:    cfg.NetworkPolicy,
+		},
 	})
 
 	server := &http.Server{
@@ -50,11 +88,11 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
-		WriteTimeout:      30 * time.Second,
+		WriteTimeout:      0,
 		IdleTimeout:       60 * time.Second,
 	}
 
-	return &App{config: cfg, logger: logger, pool: pool, server: server}, nil
+	return &App{config: cfg, logger: logger, pool: pool, manager: manager, server: server}, nil
 }
 
 func (a *App) Run(ctx context.Context) error {
@@ -73,9 +111,15 @@ func (a *App) Run(ctx context.Context) error {
 		if err := a.server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("shutdown HTTP server: %w", err)
 		}
+		if err := a.manager.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown diagnostic workers: %w", err)
+		}
 		a.logger.Info("graceful shutdown complete")
 		return nil
 	case err := <-serverErrors:
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = a.manager.Shutdown(shutdownCtx)
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil
 		}

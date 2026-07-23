@@ -136,6 +136,9 @@ func (m *Manager) execute(runID uuid.UUID) error {
 	if err != nil {
 		return err
 	}
+	if terminal(run.Status) {
+		return nil
+	}
 	parsedTarget, err := target.Parse(run.TargetInput)
 	if err != nil {
 		return fmt.Errorf("parse stored target: %w", err)
