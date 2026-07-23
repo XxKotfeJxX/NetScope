@@ -13,6 +13,8 @@
 bin/
 coverage.out
 *.test
+netscope
+netscope.exe
 
 # Frontend
 web/node_modules/
@@ -22,4 +24,3 @@ web/coverage/
 # OS files
 .DS_Store
 Thumbs.db
-

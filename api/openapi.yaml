@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: NetScope API
+  version: 0.0.1
+  description: Concurrent network diagnostics API.
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Check whether the API process is alive
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Check whether API dependencies are ready
+      responses:
+        "200":
+          description: API is ready
+        "503":
+          description: A required dependency is unavailable
+components:
+  schemas:
+    Health:
+      type: object
+      required: [status, service, version]
+      properties:
+        status:
+          type: string
+          const: ok
+        service:
+          type: string
+          const: netscope
+        version:
+          type: string
+
