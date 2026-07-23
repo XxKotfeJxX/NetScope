@@ -40,9 +40,9 @@ func (h apiHandler) capabilities(w http.ResponseWriter, _ *http.Request) {
 		"version": h.version,
 		"checks": map[string]capability{
 			"dns":        {Available: true},
-			"tcp":        {Available: false, Reason: "not_implemented"},
-			"http":       {Available: false, Reason: "not_implemented"},
-			"tls":        {Available: false, Reason: "not_implemented"},
+			"tcp":        {Available: true},
+			"http":       {Available: true},
+			"tls":        {Available: true},
 			"ping":       {Available: false, Reason: "not_implemented"},
 			"traceroute": {Available: false, Reason: "not_implemented"},
 		},

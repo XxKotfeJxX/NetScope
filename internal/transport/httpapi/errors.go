@@ -60,6 +60,10 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusBadRequest
 		code = "unsupported_check"
 		message = "One or more requested checks are unavailable."
+	case errors.Is(err, diagnostics.ErrInvalidOptions):
+		status = http.StatusBadRequest
+		code = "invalid_options"
+		message = err.Error()
 	case errors.Is(err, diagnostics.ErrRunNotFound):
 		status = http.StatusNotFound
 		code = "run_not_found"
