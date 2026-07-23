@@ -34,7 +34,9 @@ export function HistoryPage() {
               <strong>{run.normalizedHost}</strong>
               <small>{run.target}</small>
             </div>
-            <span>DNS</span>
+            <span>
+              {run.checks.map((check) => check.toUpperCase()).join(", ")}
+            </span>
             <span>
               <Clock3 size={14} /> {new Date(run.createdAt).toLocaleString()}
             </span>

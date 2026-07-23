@@ -10,7 +10,10 @@ import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { DNSResult } from "../components/DNSResult";
+import { HTTPResult } from "../components/HTTPResult";
 import { StatusBadge } from "../components/StatusBadge";
+import { TCPResult } from "../components/TCPResult";
+import { TLSResult } from "../components/TLSResult";
 
 const activeStatuses = new Set(["queued", "running"]);
 
@@ -67,6 +70,9 @@ export function RunPage() {
 
   const data = run.data;
   const dns = data.results.find((result) => result.type === "dns");
+  const tcp = data.results.find((result) => result.type === "tcp");
+  const http = data.results.find((result) => result.type === "http");
+  const tls = data.results.find((result) => result.type === "tls");
   const active = activeStatuses.has(data.status);
 
   return (
@@ -89,7 +95,9 @@ export function RunPage() {
         </div>
         <div>
           <span>Checks</span>
-          <strong>DNS</strong>
+          <strong>
+            {data.checks.map((check) => check.toUpperCase()).join(" · ")}
+          </strong>
         </div>
         <div>
           <span>Timeout</span>
@@ -119,16 +127,17 @@ export function RunPage() {
           <span className="scanner-line" />
           <LoaderCircle className="spin" size={22} />
           <div>
-            <h2>{data.status === "queued" ? "Queued" : "Resolving records"}</h2>
+            <h2>{data.status === "queued" ? "Queued" : "Running checks"}</h2>
             <p>Live updates are connected through Server-Sent Events.</p>
           </div>
         </section>
       )}
       {dns && <DNSResult result={dns} />}
-      {!active && !dns && (
-        <div className="error-alert">
-          This run finished without a DNS result.
-        </div>
+      {tcp && <TCPResult result={tcp} />}
+      {http && <HTTPResult result={http} />}
+      {tls && <TLSResult result={tls} />}
+      {!active && data.results.length === 0 && (
+        <div className="error-alert">This run finished without results.</div>
       )}
     </main>
   );

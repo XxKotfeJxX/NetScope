@@ -13,6 +13,7 @@ export type CheckStatus =
 export interface RunOptions {
   timeoutMs: number;
   tcpPorts?: number[];
+  httpMethod: string;
   followRedirects: boolean;
   maxRedirects: number;
   ipVersion: string;
@@ -81,6 +82,59 @@ export interface DNSData {
   txt: string[];
   ptr: string[];
   errors?: Record<string, { code: string; message: string }>;
+}
+
+export interface TCPData {
+  ports: Array<{
+    port: number;
+    status: string;
+    resolvedIp?: string;
+    connectTimeMs: number;
+    errorCode?: string;
+    errorMessage?: string;
+  }>;
+}
+
+export interface HTTPData {
+  requestedUrl: string;
+  finalUrl?: string;
+  method: string;
+  statusCode?: number;
+  protocol?: string;
+  contentType?: string;
+  contentLength?: number;
+  redirectChain: Array<{ url: string; statusCode: number }>;
+  resolvedIp?: string;
+  remoteAddress?: string;
+  timings: {
+    dnsMs: number;
+    connectMs: number;
+    tlsMs: number;
+    ttfbMs: number;
+    totalMs: number;
+  };
+  bodySha256?: string;
+  bodyPreview?: string;
+  bodyTruncated: boolean;
+}
+
+export interface TLSData {
+  tlsVersion?: string;
+  cipherSuite?: string;
+  serverName: string;
+  resolvedIp?: string;
+  subject?: string;
+  issuer?: string;
+  serialNumber?: string;
+  sans: string[];
+  validFrom?: string;
+  validUntil?: string;
+  daysRemaining: number;
+  hostnameValid: boolean;
+  chainValid: boolean;
+  selfSigned: boolean;
+  expired: boolean;
+  warnings: string[];
 }
 
 export interface APIError {

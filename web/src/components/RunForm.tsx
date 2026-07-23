@@ -1,5 +1,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { LoaderCircle, Play, RadioTower } from "lucide-react";
+import {
+  Braces,
+  Globe2,
+  LoaderCircle,
+  LockKeyhole,
+  Network,
+  Play,
+} from "lucide-react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import type { Capabilities, CheckType, RunOptions } from "../api/types";
@@ -9,6 +17,15 @@ function hasNoControlCharacters(value: string) {
     const code = character.charCodeAt(0);
     return code > 31 && code !== 127;
   });
+}
+
+function validPorts(value: string) {
+  if (value.trim() === "") return true;
+  const ports = value.split(",").map((item) => Number(item.trim()));
+  return (
+    ports.length <= 10 &&
+    ports.every((port) => Number.isInteger(port) && port >= 1 && port <= 65535)
+  );
 }
 
 const schema = z.object({
@@ -24,9 +41,23 @@ const schema = z.object({
       message: "CIDR ranges are not supported.",
     }),
   timeoutMs: z.number().min(500).max(30_000),
+  tcpPorts: z
+    .string()
+    .refine(validPorts, "Use up to 10 ports between 1 and 65,535."),
 });
 
 type FormValues = z.infer<typeof schema>;
+
+const checkDefinitions: Array<{
+  type: CheckType;
+  label: string;
+  icon: typeof Braces;
+}> = [
+  { type: "dns", label: "DNS", icon: Braces },
+  { type: "tcp", label: "TCP", icon: Network },
+  { type: "http", label: "HTTP", icon: Globe2 },
+  { type: "tls", label: "TLS", icon: LockKeyhole },
+];
 
 export function RunForm({
   capabilities,
@@ -43,6 +74,13 @@ export function RunForm({
     options: RunOptions;
   }) => void;
 }) {
+  const [checks, setChecks] = useState<CheckType[]>([
+    "dns",
+    "tcp",
+    "http",
+    "tls",
+  ]);
+  const [checkError, setCheckError] = useState("");
   const {
     register,
     handleSubmit,
@@ -52,31 +90,50 @@ export function RunForm({
     defaultValues: {
       target: initialTarget,
       timeoutMs: capabilities?.runtime.defaultTimeoutMs ?? 5000,
+      tcpPorts: "80, 443",
     },
   });
+
+  function toggleCheck(type: CheckType) {
+    setChecks((current) =>
+      current.includes(type)
+        ? current.filter((check) => check !== type)
+        : [...current, type],
+    );
+    setCheckError("");
+  }
 
   return (
     <form
       className="diagnostic-form"
-      onSubmit={handleSubmit((values) =>
+      onSubmit={handleSubmit((values) => {
+        if (checks.length === 0) {
+          setCheckError("Select at least one diagnostic check.");
+          return;
+        }
         onSubmit({
           target: values.target.trim(),
-          checks: ["dns"],
+          checks,
           options: {
             timeoutMs: values.timeoutMs,
+            tcpPorts: values.tcpPorts
+              .split(",")
+              .map((port) => Number(port.trim()))
+              .filter(Boolean),
+            httpMethod: "GET",
             followRedirects: true,
             maxRedirects: 5,
             ipVersion: "auto",
           },
-        }),
-      )}
+        });
+      })}
     >
       <div className="target-row">
         <label className="target-field">
           <span>Target</span>
           <input
             {...register("target")}
-            placeholder="example.com"
+            placeholder="https://example.com"
             autoComplete="off"
             aria-invalid={Boolean(errors.target)}
           />
@@ -93,22 +150,37 @@ export function RunForm({
       {errors.target && <p className="field-error">{errors.target.message}</p>}
 
       <div className="form-options">
-        <div>
+        <div className="checks-group">
           <p className="option-label">Checks</p>
-          <label className="check-option enabled">
-            <input type="checkbox" checked readOnly />
-            <RadioTower size={17} />
-            DNS
-            <span>available</span>
-          </label>
-          {["TCP", "HTTP", "TLS"].map((check) => (
-            <label className="check-option" key={check} title="Coming next">
-              <input type="checkbox" disabled />
-              {check}
-              <span>soon</span>
-            </label>
-          ))}
+          {checkDefinitions.map(({ type, label, icon: Icon }) => {
+            const available = capabilities?.checks[type]?.available ?? true;
+            const selected = checks.includes(type);
+            return (
+              <label
+                className={`check-option ${selected ? "enabled" : ""}`}
+                key={type}
+              >
+                <input
+                  type="checkbox"
+                  checked={selected}
+                  disabled={!available}
+                  onChange={() => toggleCheck(type)}
+                />
+                <Icon size={16} />
+                {label}
+                <span>{available ? (selected ? "on" : "off") : "n/a"}</span>
+              </label>
+            );
+          })}
+          {checkError && <p className="field-error">{checkError}</p>}
         </div>
+        <label className="ports-field">
+          <span className="option-label">TCP ports</span>
+          <input {...register("tcpPorts")} placeholder="80, 443" />
+          {errors.tcpPorts && (
+            <span className="field-error">{errors.tcpPorts.message}</span>
+          )}
+        </label>
         <label className="timeout-field">
           <span className="option-label">Probe timeout</span>
           <select {...register("timeoutMs", { valueAsNumber: true })}>

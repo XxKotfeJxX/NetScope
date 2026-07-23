@@ -33,8 +33,8 @@ export function DashboardPage() {
           <span> is actually doing.</span>
         </h1>
         <p>
-          Run a focused DNS inspection against one explicit target. Results are
-          persisted and streamed back as soon as the worker finishes.
+          Run DNS, TCP, HTTP, and TLS checks against one explicit target.
+          Results are persisted and streamed back as each probe finishes.
         </p>
       </section>
 
@@ -65,7 +65,10 @@ export function DashboardPage() {
               <div className="target-avatar">{run.normalizedHost[0]}</div>
               <div className="run-target">
                 <strong>{run.normalizedHost}</strong>
-                <span>DNS · {run.target}</span>
+                <span>
+                  {run.checks.map((check) => check.toUpperCase()).join(" · ")} ·{" "}
+                  {run.target}
+                </span>
               </div>
               <span className="run-time">
                 <Clock3 size={14} />
@@ -79,7 +82,7 @@ export function DashboardPage() {
             <div className="empty-state">
               <RadioTowerIcon />
               <h3>No diagnostics yet</h3>
-              <p>Your first DNS result will appear here.</p>
+              <p>Your first network diagnostic will appear here.</p>
             </div>
           )}
         </div>
