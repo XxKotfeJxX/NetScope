@@ -447,19 +447,45 @@ p {
   content: "↑";
 }
 
-.advanced-grid {
+.advanced-sections {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 180px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
-  max-width: 520px;
   margin-top: 16px;
 }
 
-.ports-field,
-.timeout-field {
+.option-group {
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+
+.option-group legend {
+  padding: 0 6px;
+  color: var(--ink);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.advanced-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.advanced-grid label {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 7px;
+}
+
+.advanced-grid .advanced-span {
+  grid-column: 1 / -1;
 }
 
 .option-label {
@@ -469,8 +495,8 @@ p {
   text-transform: uppercase;
 }
 
-.ports-field input,
-.timeout-field select {
+.advanced-grid input:not([type="checkbox"]),
+.advanced-grid select {
   width: 100%;
   height: 38px;
   padding: 0 10px;
@@ -480,6 +506,18 @@ p {
   border: 1px solid var(--line);
   border-radius: 5px;
   background: #fff;
+}
+
+.advanced-grid .toggle-field {
+  min-height: 38px;
+  align-items: center;
+  flex-direction: row;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.toggle-field input {
+  accent-color: var(--accent);
 }
 
 .form-alert {
@@ -1538,6 +1576,10 @@ p {
     width: fit-content;
   }
 
+  .advanced-sections {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .report-layout {
     grid-template-columns: 230px minmax(0, 1fr);
     gap: 32px;
@@ -1591,6 +1633,10 @@ p {
   }
 
   .advanced-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .advanced-sections {
     grid-template-columns: 1fr;
   }
 

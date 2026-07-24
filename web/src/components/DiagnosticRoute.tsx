@@ -5,18 +5,29 @@ import type {
   DiagnosticRun,
   DNSData,
   HTTPData,
+  PingData,
   TCPData,
   TLSData,
+  TracerouteData,
 } from "../api/types";
 import { StatusBadge } from "./StatusBadge";
 
-const routeOrder: CheckType[] = ["dns", "tcp", "tls", "http"];
+const routeOrder: CheckType[] = [
+  "dns",
+  "ping",
+  "traceroute",
+  "tcp",
+  "tls",
+  "http",
+];
 
 const labels: Record<CheckType, { title: string; action: string }> = {
   dns: { title: "DNS", action: "Resolve host" },
   tcp: { title: "TCP", action: "Open connection" },
   tls: { title: "TLS", action: "Verify certificate" },
   http: { title: "HTTP", action: "Read response" },
+  ping: { title: "Ping", action: "Measure reachability" },
+  traceroute: { title: "Trace", action: "Discover network path" },
 };
 
 function resultSummary(result: CheckResult) {
@@ -40,6 +51,17 @@ function resultSummary(result: CheckResult) {
     return data.tlsVersion
       ? `${data.tlsVersion} · valid for ${data.daysRemaining} days`
       : result.summary || "Handshake complete";
+  }
+  if (result.type === "ping") {
+    const data = result.data as PingData;
+    return `${data.packetsReceived}/${data.packetsSent} replies · ${data.averageRttMs?.toFixed(2) ?? "—"} ms avg`;
+  }
+  if (result.type === "traceroute") {
+    const data = result.data as TracerouteData;
+    const hopCount = data.hops?.length ?? 0;
+    return data.reached
+      ? `Destination reached in ${hopCount} hops`
+      : `${hopCount} hops · destination not reached`;
   }
   const data = result.data as HTTPData;
   return data.statusCode
