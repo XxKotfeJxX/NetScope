@@ -1,5 +1,6 @@
 import type {
   APIError,
+  AuditPage,
   Capabilities,
   CheckType,
   CurrentAccount,
@@ -14,6 +15,8 @@ import type {
   TargetInput,
   TargetPage,
   Workspace,
+  WorkspaceMember,
+  WorkspaceRole,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -97,6 +100,24 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name }),
     }),
+  listWorkspaceMembers: () =>
+    request<WorkspaceMember[]>("/api/v1/workspace/members"),
+  addWorkspaceMember: (email: string, role: WorkspaceRole) =>
+    request<WorkspaceMember>("/api/v1/workspace/members", {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+  updateWorkspaceMember: (userID: string, role: WorkspaceRole) =>
+    request<WorkspaceMember>(`/api/v1/workspace/members/${userID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+  removeWorkspaceMember: (userID: string) =>
+    request<void>(`/api/v1/workspace/members/${userID}`, {
+      method: "DELETE",
+    }),
+  workspaceAudit: () =>
+    request<AuditPage>("/api/v1/workspace/audit?page=1&pageSize=20"),
 
   createRun: (payload: {
     target: string;

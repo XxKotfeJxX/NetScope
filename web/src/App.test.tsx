@@ -5,14 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { AuthProvider } from "./auth/AuthProvider";
 
-function renderApp() {
+function renderApp(path = "/") {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>
           <App />
         </MemoryRouter>
       </AuthProvider>
@@ -62,25 +62,43 @@ describe("App", () => {
               },
               sessionExpiresAt: "2026-08-24T10:00:00Z",
             }
-          : path.includes("capabilities")
-            ? {
-                version: "test",
-                checks: { dns: { available: true } },
-                runtime: {
-                  defaultTimeoutMs: 5000,
-                  maxTimeoutMs: 30000,
-                  runWorkers: 4,
-                  probeConcurrency: 8,
-                  networkPolicy: "local",
+          : path.includes("/api/v1/workspace/members")
+            ? [
+                {
+                  userId: "user",
+                  email: "owner@example.com",
+                  displayName: "Acme Owner",
+                  role: "owner",
+                  joinedAt: "2026-07-24T10:00:00Z",
                 },
-              }
-            : {
-                items: [],
-                page: 1,
-                pageSize: 5,
-                totalItems: 0,
-                totalPages: 0,
-              };
+              ]
+            : path.includes("/api/v1/workspace/audit")
+              ? {
+                  items: [],
+                  page: 1,
+                  pageSize: 20,
+                  totalItems: 0,
+                  totalPages: 0,
+                }
+              : path.includes("capabilities")
+                ? {
+                    version: "test",
+                    checks: { dns: { available: true } },
+                    runtime: {
+                      defaultTimeoutMs: 5000,
+                      maxTimeoutMs: 30000,
+                      runWorkers: 4,
+                      probeConcurrency: 8,
+                      networkPolicy: "local",
+                    },
+                  }
+                : {
+                    items: [],
+                    page: 1,
+                    pageSize: 5,
+                    totalItems: 0,
+                    totalPages: 0,
+                  };
         return {
           ok: true,
           status: 200,
@@ -136,6 +154,25 @@ describe("App", () => {
 
     expect(
       await screen.findByRole("heading", { name: /return to your workspace/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders workspace membership administration", async () => {
+    renderApp("/workspace");
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: /acme production/i,
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Members" }));
+    expect(
+      await screen.findByRole("heading", { name: /workspace members/i }),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText("owner@example.com")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: /add member/i }),
     ).toBeInTheDocument();
   });
 });

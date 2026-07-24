@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
 	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	Checks              map[string]Capability
 	Monitoring          *monitoring.Service
 	Identity            *identity.Service
+	Collaboration       *collaboration.Service
 	SessionCookieSecure bool
 }
 
@@ -84,10 +86,16 @@ func NewRouter(deps Dependencies) http.Handler {
 			router.Group(func(router chi.Router) {
 				router.Use(accounts.requireAccount)
 				router.Use(accounts.requireWorkspace)
-				mountWorkspaceRoutes(router, api, limiter, accounts.requireRole)
+				mountWorkspaceRoutes(
+					router,
+					api,
+					limiter,
+					accounts.requireRole,
+					deps.Collaboration,
+				)
 			})
 		} else {
-			mountWorkspaceRoutes(router, api, limiter, nil)
+			mountWorkspaceRoutes(router, api, limiter, nil, nil)
 		}
 	})
 
@@ -101,6 +109,7 @@ func mountWorkspaceRoutes(
 	api apiHandler,
 	limiter *rateLimiter,
 	guard roleGuard,
+	collaborationService *collaboration.Service,
 ) {
 	operator := func(middlewares ...func(http.Handler) http.Handler) []func(
 		http.Handler,
@@ -145,6 +154,29 @@ func mountWorkspaceRoutes(
 		api.deleteNotificationChannel,
 	)
 	router.Get("/monitoring", api.monitoringOverview)
+	if collaborationService != nil {
+		collaborationAPI := collaborationHandler{service: collaborationService}
+		router.With(guard(identity.RoleAdmin)).Get(
+			"/workspace/members",
+			collaborationAPI.listMembers,
+		)
+		router.With(guard(identity.RoleAdmin)).Post(
+			"/workspace/members",
+			collaborationAPI.addMember,
+		)
+		router.With(guard(identity.RoleAdmin)).Patch(
+			"/workspace/members/{userID}",
+			collaborationAPI.updateMember,
+		)
+		router.With(guard(identity.RoleAdmin)).Delete(
+			"/workspace/members/{userID}",
+			collaborationAPI.removeMember,
+		)
+		router.With(guard(identity.RoleAdmin)).Get(
+			"/workspace/audit",
+			collaborationAPI.listAudit,
+		)
+	}
 }
 
 func (h healthHandler) live(w http.ResponseWriter, _ *http.Request) {
