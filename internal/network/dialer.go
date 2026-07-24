@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -10,6 +11,10 @@ import (
 
 	"github.com/XxKotfeJxX/netscope/internal/target"
 )
+
+var ErrIPVersionUnavailable = errors.New("requested IP version is unavailable")
+
+type ipVersionContextKey struct{}
 
 type Resolver interface {
 	LookupNetIP(context.Context, string, string) ([]netip.Addr, error)
@@ -28,11 +33,31 @@ func NewSecureDialer(resolver Resolver, policy target.Policy, timeout time.Durat
 	return &SecureDialer{resolver: resolver, policy: policy, timeout: timeout}
 }
 
+func WithIPVersion(ctx context.Context, version string) context.Context {
+	switch version {
+	case "ipv4", "ipv6":
+		return context.WithValue(ctx, ipVersionContextKey{}, version)
+	default:
+		return ctx
+	}
+}
+
 func (d *SecureDialer) Resolve(ctx context.Context, host string) ([]netip.Addr, error) {
+	return d.ResolveVersion(ctx, host, "auto")
+}
+
+func (d *SecureDialer) ResolveVersion(
+	ctx context.Context,
+	host string,
+	version string,
+) ([]netip.Addr, error) {
 	if address, err := netip.ParseAddr(host); err == nil {
 		address = address.Unmap()
 		if err := d.policy.ValidateAddress(address); err != nil {
 			return nil, err
+		}
+		if !matchesIPVersion(address, version) {
+			return nil, ErrIPVersionUnavailable
 		}
 		return []netip.Addr{address}, nil
 	}
@@ -45,11 +70,21 @@ func (d *SecureDialer) Resolve(ctx context.Context, host string) ([]netip.Addr, 
 		return nil, fmt.Errorf("resolve host: no addresses returned")
 	}
 	for _, address := range addresses {
-		if err := d.policy.ValidateAddress(address); err != nil {
+		if err := d.policy.ValidateAddress(address.Unmap()); err != nil {
 			return nil, err
 		}
 	}
-	return addresses, nil
+	filtered := make([]netip.Addr, 0, len(addresses))
+	for _, address := range addresses {
+		address = address.Unmap()
+		if matchesIPVersion(address, version) {
+			filtered = append(filtered, address)
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, ErrIPVersionUnavailable
+	}
+	return filtered, nil
 }
 
 func (d *SecureDialer) DialContext(
@@ -61,7 +96,11 @@ func (d *SecureDialer) DialContext(
 	if err != nil {
 		return nil, fmt.Errorf("parse network address: %w", err)
 	}
-	addresses, err := d.Resolve(ctx, host)
+	version, _ := ctx.Value(ipVersionContextKey{}).(string)
+	if version == "" {
+		version = "auto"
+	}
+	addresses, err := d.ResolveVersion(ctx, host, version)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +122,17 @@ func (d *SecureDialer) DialContext(
 		}
 	}
 	return nil, fmt.Errorf("connect to allowed address on port %s: %w", port, lastError)
+}
+
+func matchesIPVersion(address netip.Addr, version string) bool {
+	switch version {
+	case "ipv4":
+		return address.Is4()
+	case "ipv6":
+		return address.Is6()
+	default:
+		return true
+	}
 }
 
 func AddressFromConnection(connection net.Conn) string {

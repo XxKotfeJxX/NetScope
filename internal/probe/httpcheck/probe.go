@@ -43,6 +43,7 @@ func (p *Probe) Run(
 	options diagnostics.RunOptions,
 ) diagnostics.CheckResult {
 	started := time.Now().UTC()
+	ctx = network.WithIPVersion(ctx, options.IPVersion)
 	requestedURL := targetURL(parsedTarget)
 	data := Result{
 		RequestedURL: requestedURL,
@@ -54,7 +55,7 @@ func (p *Probe) Run(
 	}
 
 	dnsStarted := time.Now()
-	if addresses, err := p.dialer.Resolve(ctx, parsedTarget.Host); err == nil {
+	if addresses, err := p.dialer.ResolveVersion(ctx, parsedTarget.Host, options.IPVersion); err == nil {
 		data.Timings.DNSMS = time.Since(dnsStarted).Milliseconds()
 		if len(addresses) > 0 {
 			data.ResolvedIP = addresses[0].String()
@@ -175,7 +176,7 @@ func (p *Probe) Run(
 		if len(preview) > 512 {
 			preview = preview[:512]
 		}
-		data.BodyPreview = strings.ToValidUTF8(string(preview), "�")
+		data.BodyPreview = strings.ToValidUTF8(string(preview), "\uFFFD")
 	}
 	data.Timings.TotalMS = time.Since(started).Milliseconds()
 
