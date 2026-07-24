@@ -17,6 +17,7 @@ type apiHandler struct {
 	events  diagnostics.EventPublisher
 	version string
 	runtime RuntimeInfo
+	checks  map[string]Capability
 }
 
 type createRunRequest struct {
@@ -32,20 +33,16 @@ type createRunResponse struct {
 }
 
 func (h apiHandler) capabilities(w http.ResponseWriter, _ *http.Request) {
-	type capability struct {
-		Available bool   `json:"available"`
-		Reason    string `json:"reason,omitempty"`
+	checks := h.checks
+	if checks == nil {
+		checks = map[string]Capability{
+			"dns": {Available: true}, "tcp": {Available: true},
+			"http": {Available: true}, "tls": {Available: true},
+		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version": h.version,
-		"checks": map[string]capability{
-			"dns":        {Available: true},
-			"tcp":        {Available: true},
-			"http":       {Available: true},
-			"tls":        {Available: true},
-			"ping":       {Available: false, Reason: "not_implemented"},
-			"traceroute": {Available: false, Reason: "not_implemented"},
-		},
+		"checks":  checks,
 		"runtime": h.runtime,
 	})
 }

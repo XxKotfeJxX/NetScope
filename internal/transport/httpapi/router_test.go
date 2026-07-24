@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -53,5 +54,40 @@ func TestAPIErrorDoesNotExposeInternalDetails(t *testing.T) {
 	}
 	if strings.Contains(body, target.ErrAddressBlocked.Error()) {
 		t.Fatalf("response exposed internal error: %q", body)
+	}
+}
+
+func TestCapabilitiesExposeRuntimeProbeAvailability(t *testing.T) {
+	t.Parallel()
+
+	router := NewRouter(Dependencies{
+		Logger:    slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Version:   "0.2.0-test",
+		WebOrigin: "http://localhost:5173",
+		Checks: map[string]Capability{
+			"dns":  {Available: true},
+			"ping": {Available: false, Reason: "raw_icmp_unavailable"},
+		},
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/v1/capabilities", nil)
+	response := httptest.NewRecorder()
+
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusOK)
+	}
+	var payload struct {
+		Version string                `json:"version"`
+		Checks  map[string]Capability `json:"checks"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode capabilities: %v", err)
+	}
+	if payload.Version != "0.2.0-test" || payload.Checks["ping"].Available {
+		t.Fatalf("capabilities = %+v", payload)
+	}
+	if payload.Checks["ping"].Reason != "raw_icmp_unavailable" {
+		t.Fatalf("ping reason = %q", payload.Checks["ping"].Reason)
 	}
 }

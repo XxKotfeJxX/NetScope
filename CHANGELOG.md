@@ -5,6 +5,12 @@ Versioning and uses the Keep a Changelog format.
 
 ## [Unreleased]
 
+### Added
+
+- IPv4 and IPv6 preference for connection-oriented probes.
+- Capability-detected ICMP ping and traceroute probes with bounded packet and
+  hop counts.
+
 ## [0.1.0] - 2026-07-24
 
 ### Added

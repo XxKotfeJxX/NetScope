@@ -78,6 +78,11 @@ func (m *Manager) Enqueue(runID uuid.UUID) error {
 	}
 }
 
+func (m *Manager) Supports(check CheckType) bool {
+	_, exists := m.probes[check]
+	return exists
+}
+
 func (m *Manager) Cancel(ctx context.Context, runID uuid.UUID) error {
 	run, err := m.repository.GetByID(ctx, runID)
 	if err != nil {

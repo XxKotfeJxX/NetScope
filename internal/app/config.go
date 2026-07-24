@@ -28,6 +28,7 @@ type Config struct {
 	AllowLoopback       bool
 	AllowPrivate        bool
 	AllowLinkLocal      bool
+	ICMPEnabled         bool
 	LogLevel            slog.Level
 	LogFormat           string
 }
@@ -84,6 +85,9 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.AllowLinkLocal, err = envBool("ALLOW_LINK_LOCAL_TARGETS", false); err != nil {
+		return Config{}, err
+	}
+	if cfg.ICMPEnabled, err = envBool("ICMP_ENABLED", true); err != nil {
 		return Config{}, err
 	}
 	if cfg.NetworkPolicy != "local" && cfg.NetworkPolicy != "public" {
