@@ -1,6 +1,5 @@
-import { Clock3, Globe2 } from "lucide-react";
 import type { CheckResult, HTTPData } from "../api/types";
-import { StatusBadge } from "./StatusBadge";
+import { ResultSection } from "./ResultSection";
 
 export function HTTPResult({ result }: { result: CheckResult }) {
   const data = result.data as HTTPData;
@@ -9,66 +8,72 @@ export function HTTPResult({ result }: { result: CheckResult }) {
     ["Connect", data.timings?.connectMs ?? 0],
     ["TLS", data.timings?.tlsMs ?? 0],
     ["TTFB", data.timings?.ttfbMs ?? 0],
-    ["Total", data.timings?.totalMs ?? 0],
   ] as const;
-  const maximum = Math.max(...phases.map(([, value]) => value), 1);
+  const total = Math.max(data.timings?.totalMs ?? 0, 1);
 
   return (
-    <section className="result-card">
-      <header className="result-header">
-        <div className="result-icon">
-          <Globe2 size={19} />
+    <ResultSection
+      index="05"
+      title="HTTP response"
+      layer="Application layer"
+      result={result}
+    >
+      <dl className="technical-table compact-table">
+        <div className="technical-row">
+          <dt>Status</dt>
+          <dd>
+            <code>
+              {data.statusCode
+                ? `${data.statusCode} · ${data.protocol ?? "HTTP"}`
+                : "Unavailable"}
+            </code>
+          </dd>
         </div>
-        <div>
-          <p className="card-kicker">Application layer</p>
-          <h2>HTTP response</h2>
+        <div className="technical-row">
+          <dt>Final URL</dt>
+          <dd>
+            <code>{data.finalUrl ?? data.requestedUrl}</code>
+          </dd>
         </div>
-        <StatusBadge status={result.status} />
-      </header>
-      <div className="result-meta">
-        <span>
-          <Clock3 size={14} /> {result.durationMs} ms
-        </span>
-        <span>
-          {data.statusCode
-            ? `${data.statusCode} · ${data.protocol}`
-            : result.summary}
-        </span>
-      </div>
-      {result.errorMessage && (
-        <div className="error-alert">{result.errorMessage}</div>
-      )}
-      <div className="http-summary-grid">
-        <div>
-          <span>Final URL</span>
-          <code>{data.finalUrl ?? data.requestedUrl}</code>
+        <div className="technical-row">
+          <dt>Content</dt>
+          <dd>
+            <code>{data.contentType || "unknown"}</code>
+          </dd>
         </div>
-        <div>
-          <span>Content</span>
-          <code>{data.contentType || "unknown"}</code>
+        <div className="technical-row">
+          <dt>Remote</dt>
+          <dd>
+            <code>{data.remoteAddress || data.resolvedIp || "—"}</code>
+          </dd>
         </div>
-        <div>
-          <span>Remote</span>
-          <code>{data.remoteAddress || data.resolvedIp || "—"}</code>
+        <div className="technical-row">
+          <dt>Body SHA-256</dt>
+          <dd>
+            <code>{data.bodySha256 ?? "—"}</code>
+          </dd>
         </div>
-        <div>
-          <span>Body SHA-256</span>
-          <code>{data.bodySha256?.slice(0, 20) ?? "—"}…</code>
+      </dl>
+
+      <div className="timing-block">
+        <div className="subsection-heading">
+          <span>Request timing</span>
+          <code>{data.timings?.totalMs ?? 0} ms total</code>
         </div>
-      </div>
-      <div className="timing-chart">
-        {phases.map(([label, value]) => (
-          <div className="timing-row" key={label}>
-            <span>{label}</span>
-            <div>
-              <i
-                style={{ width: `${Math.max((value / maximum) * 100, 2)}%` }}
-              />
+        <div className="timing-strip" aria-label="HTTP request timing">
+          {phases.map(([label, value]) => (
+            <div
+              className={`timing-segment timing-${label.toLowerCase()}`}
+              key={label}
+              style={{ flexGrow: Math.max(value, total * 0.04) }}
+              title={`${label}: ${value} ms`}
+            >
+              <span>{label}</span>
+              <code>{value} ms</code>
             </div>
-            <code>{value} ms</code>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </section>
+    </ResultSection>
   );
 }

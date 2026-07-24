@@ -1,9 +1,19 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Clock3 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import type { DiagnosticRun } from "../api/types";
 import { api } from "../api/client";
 import { RunForm } from "../components/RunForm";
 import { StatusBadge } from "../components/StatusBadge";
+
+function durationFor(run: DiagnosticRun) {
+  if (run.startedAt && run.completedAt) {
+    return Math.max(
+      new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime(),
+      0,
+    );
+  }
+  return Math.max(...run.results.map((result) => result.durationMs), 0);
+}
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -13,8 +23,8 @@ export function DashboardPage() {
     queryFn: api.capabilities,
   });
   const recent = useQuery({
-    queryKey: ["runs", 1, 5],
-    queryFn: () => api.listRuns(1, 5),
+    queryKey: ["runs", 1, 6],
+    queryFn: () => api.listRuns(1, 6),
   });
   const createRun = useMutation({
     mutationFn: api.createRun,
@@ -24,18 +34,25 @@ export function DashboardPage() {
   return (
     <main className="page dashboard-page">
       <section className="hero">
-        <div className="eyebrow">
-          <span className="pulse" />
-          Live diagnostic workspace
+        <div className="hero-copy">
+          <p className="section-label">Network field manual / 01</p>
+          <h1>Run a network diagnostic</h1>
+          <p>
+            Inspect resolution, connection timing, transport security, and the
+            final HTTP response for one explicit target.
+          </p>
         </div>
-        <h1>
-          See what the network
-          <span> is actually doing.</span>
-        </h1>
-        <p>
-          Run DNS, TCP, HTTP, and TLS checks against one explicit target.
-          Results are persisted and streamed back as each probe finishes.
-        </p>
+        <div className="route-preview" aria-label="Diagnostic sequence">
+          <span>target</span>
+          <i />
+          <span>DNS</span>
+          <i />
+          <span>TCP</span>
+          <i />
+          <span>TLS</span>
+          <i />
+          <span>HTTP</span>
+        </div>
       </section>
 
       <RunForm
@@ -45,52 +62,64 @@ export function DashboardPage() {
         onSubmit={(payload) => createRun.mutate(payload)}
       />
       {createRun.error && (
-        <div className="error-alert form-alert">{createRun.error.message}</div>
+        <div className="error-alert form-alert">
+          <strong>Diagnostic could not be started</strong>
+          <span>{createRun.error.message}</span>
+        </div>
       )}
 
       <section className="recent-section">
         <div className="section-heading">
           <div>
-            <p className="card-kicker">PostgreSQL-backed</p>
+            <p className="section-label">02 / Field log</p>
             <h2>Recent diagnostics</h2>
           </div>
-          <Link to="/history">
-            View all <ArrowUpRight size={15} />
-          </Link>
+          <Link to="/history">Open full history →</Link>
         </div>
-        <div className="run-list">
-          {recent.isLoading && <div className="skeleton-row" />}
+
+        <div className="run-log">
+          {recent.isLoading && (
+            <>
+              <div className="skeleton-row" />
+              <div className="skeleton-row" />
+            </>
+          )}
           {recent.data?.items.map((run) => (
             <Link className="run-row" to={`/runs/${run.id}`} key={run.id}>
-              <div className="target-avatar">{run.normalizedHost[0]}</div>
+              <time dateTime={run.createdAt}>
+                {new Date(run.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </time>
               <div className="run-target">
                 <strong>{run.normalizedHost}</strong>
                 <span>
-                  {run.checks.map((check) => check.toUpperCase()).join(" · ")} ·{" "}
-                  {run.target}
+                  {run.checks.map((check) => check.toUpperCase()).join(" · ")}
                 </span>
               </div>
-              <span className="run-time">
-                <Clock3 size={14} />
-                {new Date(run.createdAt).toLocaleString()}
-              </span>
               <StatusBadge status={run.status} />
-              <ArrowUpRight size={17} />
+              <code>{durationFor(run)} ms</code>
+              <span className="row-action">Open report →</span>
             </Link>
           ))}
           {recent.data?.items.length === 0 && (
             <div className="empty-state">
-              <RadioTowerIcon />
-              <h3>No diagnostics yet</h3>
-              <p>Your first network diagnostic will appear here.</p>
+              <div className="empty-copy">
+                <p className="section-label">No diagnostics yet</p>
+                <h3>Start with a hostname, URL, or IP address</h3>
+                <p>
+                  NetScope will follow the route from DNS resolution to the
+                  final HTTP response.
+                </p>
+              </div>
+              <div className="empty-route" aria-hidden="true">
+                target ── DNS ── TCP ── TLS ── HTTP
+              </div>
             </div>
           )}
         </div>
       </section>
     </main>
   );
-}
-
-function RadioTowerIcon() {
-  return <div className="empty-icon">⌁</div>;
 }

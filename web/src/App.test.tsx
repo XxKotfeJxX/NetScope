@@ -60,7 +60,7 @@ describe("App", () => {
     renderApp();
 
     expect(
-      screen.getByRole("heading", { name: /see what the network/i }),
+      screen.getByRole("heading", { name: /run a network diagnostic/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("navigation", { name: /main navigation/i }),
@@ -70,7 +70,7 @@ describe("App", () => {
   it("validates an empty target", async () => {
     renderApp();
 
-    fireEvent.click(screen.getByRole("button", { name: /run diagnostics/i }));
+    fireEvent.click(screen.getByRole("button", { name: /run diagnostic/i }));
 
     expect(
       await screen.findByText(/enter a hostname, url, or ip address/i),

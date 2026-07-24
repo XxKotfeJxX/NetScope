@@ -1,11 +1,11 @@
-import { CalendarClock, Check, LockKeyhole, X } from "lucide-react";
 import type { CheckResult, TLSData } from "../api/types";
-import { StatusBadge } from "./StatusBadge";
+import { ResultSection } from "./ResultSection";
 
 function Validation({ label, valid }: { label: string; valid: boolean }) {
   return (
     <span className={valid ? "validation-ok" : "validation-failed"}>
-      {valid ? <Check size={13} /> : <X size={13} />} {label}
+      <span aria-hidden="true">{valid ? "●" : "×"}</span>
+      {label}
     </span>
   );
 }
@@ -13,60 +13,64 @@ function Validation({ label, valid }: { label: string; valid: boolean }) {
 export function TLSResult({ result }: { result: CheckResult }) {
   const data = result.data as TLSData;
   return (
-    <section className="result-card">
-      <header className="result-header">
-        <div className="result-icon">
-          <LockKeyhole size={19} />
+    <ResultSection
+      index="04"
+      title="TLS certificate"
+      layer="Transport security"
+      result={result}
+    >
+      <dl className="technical-table compact-table">
+        <div className="technical-row">
+          <dt>Protocol</dt>
+          <dd>
+            <code>{data.tlsVersion || "Handshake failed"}</code>
+          </dd>
         </div>
-        <div>
-          <p className="card-kicker">Transport security</p>
-          <h2>TLS certificate</h2>
+        <div className="technical-row">
+          <dt>Cipher suite</dt>
+          <dd>
+            <code>{data.cipherSuite || "Unavailable"}</code>
+          </dd>
         </div>
-        <StatusBadge status={result.status} />
-      </header>
-      <div className="result-meta">
-        <span>{data.tlsVersion || "Handshake failed"}</span>
-        <span>{data.cipherSuite}</span>
-      </div>
-      {result.errorMessage && (
-        <div className="error-alert">{result.errorMessage}</div>
-      )}
-      <div className="certificate-grid">
-        <div>
-          <span>Subject</span>
-          <code>{data.subject || "Unavailable"}</code>
+        <div className="technical-row">
+          <dt>Subject</dt>
+          <dd>
+            <code>{data.subject || "Unavailable"}</code>
+          </dd>
         </div>
-        <div>
-          <span>Issuer</span>
-          <code>{data.issuer || "Unavailable"}</code>
+        <div className="technical-row">
+          <dt>Issuer</dt>
+          <dd>
+            <code>{data.issuer || "Unavailable"}</code>
+          </dd>
         </div>
-        <div>
-          <span>Valid until</span>
-          <strong>
-            <CalendarClock size={14} />
-            {data.validUntil
-              ? new Date(data.validUntil).toLocaleDateString()
-              : "—"}
-          </strong>
+        <div className="technical-row">
+          <dt>Valid until</dt>
+          <dd>
+            <code>
+              {data.validUntil
+                ? new Date(data.validUntil).toLocaleDateString()
+                : "—"}
+              {data.validUntil ? ` · ${data.daysRemaining} days remaining` : ""}
+            </code>
+          </dd>
         </div>
-        <div>
-          <span>Remaining</span>
-          <strong>{data.daysRemaining} days</strong>
-        </div>
-      </div>
+      </dl>
       <div className="validation-list">
-        <Validation label="Hostname" valid={data.hostnameValid} />
-        <Validation label="Trust chain" valid={data.chainValid} />
-        <Validation label="Date" valid={!data.expired} />
+        <Validation label="Hostname verified" valid={data.hostnameValid} />
+        <Validation label="Trust chain valid" valid={data.chainValid} />
+        <Validation label="Certificate in date" valid={!data.expired} />
       </div>
       {(data.sans ?? []).length > 0 && (
         <div className="sans-list">
-          <span>SANs</span>
-          {(data.sans ?? []).slice(0, 8).map((san) => (
-            <code key={san}>{san}</code>
-          ))}
+          <span>Subject alternative names</span>
+          <div>
+            {(data.sans ?? []).slice(0, 8).map((san) => (
+              <code key={san}>{san}</code>
+            ))}
+          </div>
         </div>
       )}
-    </section>
+    </ResultSection>
   );
 }

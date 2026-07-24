@@ -1,14 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Braces,
-  Globe2,
-  LoaderCircle,
-  LockKeyhole,
-  Network,
-  Play,
-} from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import type { Capabilities, CheckType, RunOptions } from "../api/types";
 
@@ -48,15 +40,11 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const checkDefinitions: Array<{
-  type: CheckType;
-  label: string;
-  icon: typeof Braces;
-}> = [
-  { type: "dns", label: "DNS", icon: Braces },
-  { type: "tcp", label: "TCP", icon: Network },
-  { type: "http", label: "HTTP", icon: Globe2 },
-  { type: "tls", label: "TLS", icon: LockKeyhole },
+const checkDefinitions: Array<{ type: CheckType; label: string }> = [
+  { type: "dns", label: "DNS" },
+  { type: "tcp", label: "TCP" },
+  { type: "tls", label: "TLS" },
+  { type: "http", label: "HTTP" },
 ];
 
 export function RunForm({
@@ -84,6 +72,7 @@ export function RunForm({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -93,6 +82,7 @@ export function RunForm({
       tcpPorts: "80, 443",
     },
   });
+  const timeoutMs = useWatch({ control, name: "timeoutMs" });
 
   function toggleCheck(type: CheckType) {
     setChecks((current) =>
@@ -130,67 +120,79 @@ export function RunForm({
     >
       <div className="target-row">
         <label className="target-field">
-          <span>Target</span>
+          <span className="sr-only">Target</span>
           <input
             {...register("target")}
-            placeholder="https://example.com"
+            placeholder="example.com, https://api.example.com, or 1.1.1.1"
             autoComplete="off"
             aria-invalid={Boolean(errors.target)}
           />
         </label>
         <button className="primary-button" type="submit" disabled={pending}>
-          {pending ? (
-            <LoaderCircle className="spin" size={18} />
-          ) : (
-            <Play size={18} fill="currentColor" />
-          )}
-          {pending ? "Starting…" : "Run diagnostics"}
+          {pending && <span className="button-spinner" aria-hidden="true" />}
+          {pending ? "Starting…" : "Run diagnostic"}
         </button>
       </div>
       {errors.target && <p className="field-error">{errors.target.message}</p>}
 
-      <div className="form-options">
-        <div className="checks-group">
-          <p className="option-label">Checks</p>
-          {checkDefinitions.map(({ type, label, icon: Icon }) => {
-            const available = capabilities?.checks[type]?.available ?? true;
-            const selected = checks.includes(type);
-            return (
-              <label
-                className={`check-option ${selected ? "enabled" : ""}`}
-                key={type}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  disabled={!available}
-                  onChange={() => toggleCheck(type)}
-                />
-                <Icon size={16} />
-                {label}
-                <span>{available ? (selected ? "on" : "off") : "n/a"}</span>
-              </label>
-            );
-          })}
-          {checkError && <p className="field-error">{checkError}</p>}
-        </div>
-        <label className="ports-field">
-          <span className="option-label">TCP ports</span>
-          <input {...register("tcpPorts")} placeholder="80, 443" />
-          {errors.tcpPorts && (
-            <span className="field-error">{errors.tcpPorts.message}</span>
-          )}
-        </label>
-        <label className="timeout-field">
-          <span className="option-label">Probe timeout</span>
-          <select {...register("timeoutMs", { valueAsNumber: true })}>
-            <option value={2000}>2 seconds</option>
-            <option value={5000}>5 seconds</option>
-            <option value={10000}>10 seconds</option>
-            <option value={30000}>30 seconds</option>
-          </select>
-        </label>
+      <div className="check-strip" aria-label="Diagnostic checks">
+        {checkDefinitions.map(({ type, label }) => {
+          const available = capabilities?.checks[type]?.available ?? true;
+          const selected = checks.includes(type);
+          return (
+            <label
+              className={`check-option ${selected ? "enabled" : ""}`}
+              key={type}
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                disabled={!available}
+                onChange={() => toggleCheck(type)}
+              />
+              <span className="check-symbol" aria-hidden="true">
+                {selected ? "✓" : "○"}
+              </span>
+              {label}
+            </label>
+          );
+        })}
+        <span className="check-option unavailable" aria-disabled="true">
+          <span className="check-symbol">○</span> Ping <small>v0.2</small>
+        </span>
+        <span className="check-option unavailable" aria-disabled="true">
+          <span className="check-symbol">○</span> Trace <small>v0.2</small>
+        </span>
       </div>
+      {checkError && <p className="field-error">{checkError}</p>}
+
+      <div className="option-summary">
+        <span>Timeout {timeoutMs / 1000}s</span>
+        <span>IPv4 / IPv6 auto</span>
+        <span>Follow redirects</span>
+      </div>
+
+      <details className="advanced-options">
+        <summary>Advanced options</summary>
+        <div className="advanced-grid">
+          <label className="ports-field">
+            <span className="option-label">TCP ports</span>
+            <input {...register("tcpPorts")} placeholder="80, 443" />
+            {errors.tcpPorts && (
+              <span className="field-error">{errors.tcpPorts.message}</span>
+            )}
+          </label>
+          <label className="timeout-field">
+            <span className="option-label">Probe timeout</span>
+            <select {...register("timeoutMs", { valueAsNumber: true })}>
+              <option value={2000}>2 seconds</option>
+              <option value={5000}>5 seconds</option>
+              <option value={10000}>10 seconds</option>
+              <option value={30000}>30 seconds</option>
+            </select>
+          </label>
+        </div>
+      </details>
     </form>
   );
 }

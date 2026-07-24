@@ -96,6 +96,6 @@ describe("result cards", () => {
     expect(screen.getAllByText("192.0.2.1")).toHaveLength(2);
     expect(screen.getByText(":443")).toBeInTheDocument();
     expect(screen.getByText(/200 · HTTP\/2.0/)).toBeInTheDocument();
-    expect(screen.getByText("Trust chain")).toBeInTheDocument();
+    expect(screen.getByText(/Trust chain/)).toBeInTheDocument();
   });
 });

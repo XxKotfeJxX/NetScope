@@ -1,16 +1,15 @@
-import { Braces, Clock3 } from "lucide-react";
 import type { CheckResult, DNSData } from "../api/types";
-import { StatusBadge } from "./StatusBadge";
+import { ResultSection } from "./ResultSection";
 
 function Records({ label, records }: { label: string; records: string[] }) {
   return (
-    <div className="record-group">
+    <div className="technical-row">
       <dt>{label}</dt>
       <dd>
         {records.length ? (
           records.map((record) => <code key={record}>{record}</code>)
         ) : (
-          <span className="empty-value">No records</span>
+          <span className="empty-value">None</span>
         )}
       </dd>
     </div>
@@ -24,35 +23,24 @@ export function DNSResult({ result }: { result: CheckResult }) {
   );
 
   return (
-    <section className="result-card">
-      <header className="result-header">
-        <div className="result-icon">
-          <Braces size={19} />
-        </div>
-        <div>
-          <p className="card-kicker">Domain name system</p>
-          <h2>DNS records</h2>
-        </div>
-        <StatusBadge status={result.status} />
-      </header>
-      <div className="result-meta">
-        <span>
-          <Clock3 size={14} /> {result.durationMs} ms
-        </span>
-        <span>{result.summary}</span>
-      </div>
-      {result.errorMessage && (
-        <div className="error-alert">{result.errorMessage}</div>
-      )}
-      <dl className="records-grid">
-        <Records label="A" records={data.a ?? []} />
-        <Records label="AAAA" records={data.aaaa ?? []} />
-        <Records label="CNAME" records={data.cname ? [data.cname] : []} />
-        <Records label="MX" records={mx} />
-        <Records label="NS" records={data.ns ?? []} />
-        <Records label="TXT" records={data.txt ?? []} />
-        <Records label="PTR" records={data.ptr ?? []} />
+    <ResultSection
+      index="02"
+      title="DNS resolution"
+      layer="Domain name system"
+      result={result}
+    >
+      <dl className="technical-table">
+        <Records label="A records" records={data.a ?? []} />
+        <Records label="AAAA records" records={data.aaaa ?? []} />
+        <Records
+          label="Canonical name"
+          records={data.cname ? [data.cname] : []}
+        />
+        <Records label="Mail exchange" records={mx} />
+        <Records label="Name servers" records={data.ns ?? []} />
+        <Records label="Text records" records={data.txt ?? []} />
+        <Records label="Reverse lookup" records={data.ptr ?? []} />
       </dl>
-    </section>
+    </ResultSection>
   );
 }
