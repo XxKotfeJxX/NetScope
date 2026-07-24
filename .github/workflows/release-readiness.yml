@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       COMPOSE_PROJECT_NAME: netscope-release-ci
-      NETSCOPE_DOMAIN: netscope.example.com
+      NETSCOPE_DOMAIN: localhost
       POSTGRES_PASSWORD: ci-only-password
       DATABASE_URL: postgres://netscope:ci-only-password@postgres:5432/netscope?sslmode=disable
     steps:
@@ -42,7 +42,7 @@ jobs:
       - name: Validate production Caddy configuration
         run: >-
           docker run --rm
-          -e NETSCOPE_DOMAIN=netscope.example.com
+          -e NETSCOPE_DOMAIN=localhost
           -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro"
           caddy:2.10-alpine
           caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
@@ -52,7 +52,25 @@ jobs:
         run: docker build --tag netscope-web:ci web
       - name: Exercise backup and staged restore
         run: |
-          docker compose -f compose.production.yml up -d --build postgres api
+          docker compose -f compose.production.yml up -d --build --wait
+          docker compose -f compose.production.yml exec -T api \
+            getent hosts example.com >/dev/null
+          curl --fail --silent --show-error --insecure \
+            https://localhost/healthz |
+            jq --exit-status '.status == "ok" and .version == "1.0.0"'
+          curl --fail --silent --show-error --insecure \
+            https://localhost/api/v1/capabilities |
+            jq --exit-status '.service == "netscope"'
+          test "$(
+            curl --silent --show-error --insecure \
+              --output /dev/null --write-out '%{http_code}' \
+              https://localhost/readyz
+          )" = "404"
+          test "$(
+            curl --silent --show-error --insecure \
+              --output /dev/null --write-out '%{http_code}' \
+              https://localhost/metrics
+          )" = "404"
           NETSCOPE_COMPOSE_FILE="$PWD/compose.production.yml" \
             NETSCOPE_ENV_FILE="$PWD/.missing-ci-env" \
             bash scripts/backup-postgres.sh "$RUNNER_TEMP/netscope-backups"
