@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NetScope API
-  version: 0.1.0-dev
+  version: 0.1.0
   description: Concurrent network diagnostics API with persisted results and SSE progress.
   license:
     name: MIT
@@ -250,7 +250,13 @@ components:
         runtime:
           type: object
           required:
-            [defaultTimeoutMs, maxTimeoutMs, runWorkers, probeConcurrency, networkPolicy]
+            [
+              defaultTimeoutMs,
+              maxTimeoutMs,
+              runWorkers,
+              probeConcurrency,
+              networkPolicy,
+            ]
           properties:
             defaultTimeoutMs:
               type: integer
@@ -268,13 +274,15 @@ components:
       enum: [dns, tcp, http, tls]
     RunStatus:
       type: string
-      enum: [queued, running, completed, partial, failed, cancelled, interrupted]
+      enum:
+        [queued, running, completed, partial, failed, cancelled, interrupted]
     CheckStatus:
       type: string
       enum: [pending, running, passed, warning, failed, skipped, cancelled]
     RunOptions:
       type: object
-      required: [timeoutMs, httpMethod, followRedirects, maxRedirects, ipVersion]
+      required:
+        [timeoutMs, httpMethod, followRedirects, maxRedirects, ipVersion]
       properties:
         timeoutMs:
           type: integer
@@ -337,7 +345,8 @@ components:
           format: date-time
     CheckResult:
       type: object
-      required: [id, runId, type, status, durationMs, data, startedAt, completedAt]
+      required:
+        [id, runId, type, status, durationMs, data, startedAt, completedAt]
       properties:
         id:
           type: string
@@ -505,7 +514,16 @@ components:
     TLSResult:
       type: object
       required:
-        [serverName, sans, daysRemaining, hostnameValid, chainValid, selfSigned, expired, warnings]
+        [
+          serverName,
+          sans,
+          daysRemaining,
+          hostnameValid,
+          chainValid,
+          selfSigned,
+          expired,
+          warnings,
+        ]
       properties:
         tlsVersion:
           type: string
@@ -548,7 +566,16 @@ components:
     DiagnosticRun:
       type: object
       required:
-        [id, target, normalizedHost, status, checks, options, results, createdAt]
+        [
+          id,
+          target,
+          normalizedHost,
+          status,
+          checks,
+          options,
+          results,
+          createdAt,
+        ]
       properties:
         id:
           type: string
