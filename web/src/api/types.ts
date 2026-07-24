@@ -286,6 +286,33 @@ export interface CurrentAccount {
   sessionExpiresAt: string;
 }
 
+export interface WorkspaceMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: WorkspaceRole;
+  joinedAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  workspaceId: string;
+  actorUserId: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AuditPage {
+  items: AuditEvent[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
 export interface APIError {
   error: {
     code: string;
