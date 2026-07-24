@@ -32,9 +32,10 @@ func (p *Probe) Type() diagnostics.CheckType {
 func (p *Probe) Run(
 	ctx context.Context,
 	parsedTarget target.Target,
-	_ diagnostics.RunOptions,
+	options diagnostics.RunOptions,
 ) diagnostics.CheckResult {
 	started := time.Now().UTC()
+	ctx = network.WithIPVersion(ctx, options.IPVersion)
 	port := parsedTarget.Port
 	if port == 0 {
 		port = 443

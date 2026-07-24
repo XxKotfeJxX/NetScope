@@ -59,9 +59,12 @@ func (s *Service) Create(
 	seenChecks := make(map[CheckType]struct{}, len(checks))
 	for _, check := range checks {
 		switch check {
-		case CheckDNS, CheckTCP, CheckHTTP, CheckTLS:
+		case CheckDNS, CheckTCP, CheckHTTP, CheckTLS, CheckPing, CheckTraceroute:
 		default:
 			return DiagnosticRun{}, ErrUnsupportedCheck
+		}
+		if !s.manager.Supports(check) {
+			return DiagnosticRun{}, fmt.Errorf("%w: %s is unavailable", ErrUnsupportedCheck, check)
 		}
 		if _, exists := seenChecks[check]; !exists {
 			seenChecks[check] = struct{}{}
@@ -96,6 +99,18 @@ func (s *Service) Create(
 	}
 	if options.MaxRedirects < 0 || options.MaxRedirects > 10 {
 		return DiagnosticRun{}, fmt.Errorf("%w: maxRedirects must be between 0 and 10", ErrInvalidOptions)
+	}
+	if options.PingPackets == 0 {
+		options.PingPackets = 4
+	}
+	if options.PingPackets < 1 || options.PingPackets > 10 {
+		return DiagnosticRun{}, fmt.Errorf("%w: pingPackets must be between 1 and 10", ErrInvalidOptions)
+	}
+	if options.MaxHops == 0 {
+		options.MaxHops = 20
+	}
+	if options.MaxHops < 1 || options.MaxHops > 64 {
+		return DiagnosticRun{}, fmt.Errorf("%w: maxHops must be between 1 and 64", ErrInvalidOptions)
 	}
 	if _, requested := seenChecks[CheckTCP]; requested {
 		if len(options.TCPPorts) == 0 {
@@ -177,6 +192,10 @@ func (s *Service) List(ctx context.Context, filter ListFilter) (Page, error) {
 
 func (s *Service) Cancel(ctx context.Context, id uuid.UUID) error {
 	return s.manager.Cancel(ctx, id)
+}
+
+func (s *Service) Supports(check CheckType) bool {
+	return s.manager.Supports(check)
 }
 
 func (s *Service) validateTarget(ctx context.Context, parsed target.Target) error {
