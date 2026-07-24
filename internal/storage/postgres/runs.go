@@ -33,12 +33,12 @@ func (r *RunRepository) Create(ctx context.Context, run diagnostics.DiagnosticRu
 
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO diagnostic_runs (
-			id, target_input, normalized_host, normalized_url, status,
+			id, workspace_id, target_input, normalized_host, normalized_url, status,
 			requested_checks, options, summary, created_at
 		)
-		VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7, '{}', $8)
-	`, run.ID, run.TargetInput, run.NormalizedHost, run.NormalizedURL,
-		run.Status, checks, options, run.CreatedAt)
+		VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, '{}', $9)
+	`, run.ID, run.WorkspaceID, run.TargetInput, run.NormalizedHost,
+		run.NormalizedURL, run.Status, checks, options, run.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("create diagnostic run: %w", err)
 	}
@@ -51,13 +51,15 @@ func (r *RunRepository) GetByID(ctx context.Context, id uuid.UUID) (diagnostics.
 	var options []byte
 
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, target_input, normalized_host, COALESCE(normalized_url, ''),
+		SELECT id, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'),
+			target_input, normalized_host, COALESCE(normalized_url, ''),
 			status, requested_checks, options, summary, created_at, started_at,
 			completed_at, cancelled_at
 		FROM diagnostic_runs
 		WHERE id = $1
 	`, id).Scan(
-		&run.ID, &run.TargetInput, &run.NormalizedHost, &run.NormalizedURL,
+		&run.ID, &run.WorkspaceID, &run.TargetInput,
+		&run.NormalizedHost, &run.NormalizedURL,
 		&run.Status, &checks, &options, &run.Summary, &run.CreatedAt,
 		&run.StartedAt, &run.CompletedAt, &run.CancelledAt,
 	)
@@ -90,21 +92,25 @@ func (r *RunRepository) List(ctx context.Context, filter diagnostics.ListFilter)
 
 	var total int64
 	if err := r.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM diagnostic_runs WHERE ($1 = '' OR status = $1)`,
+		`SELECT COUNT(*) FROM diagnostic_runs
+		 WHERE workspace_id = $1 AND ($2 = '' OR status = $2)`,
+		filter.WorkspaceID,
 		string(filter.Status),
 	).Scan(&total); err != nil {
 		return diagnostics.Page{}, fmt.Errorf("count diagnostic runs: %w", err)
 	}
 
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, target_input, normalized_host, COALESCE(normalized_url, ''),
+		SELECT id, workspace_id, target_input, normalized_host,
+			COALESCE(normalized_url, ''),
 			status, requested_checks, options, summary, created_at, started_at,
 			completed_at, cancelled_at
 		FROM diagnostic_runs
-		WHERE ($1 = '' OR status = $1)
+		WHERE workspace_id = $1 AND ($2 = '' OR status = $2)
 		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`, string(filter.Status), filter.PageSize, (filter.Page-1)*filter.PageSize)
+		LIMIT $3 OFFSET $4
+	`, filter.WorkspaceID, string(filter.Status),
+		filter.PageSize, (filter.Page-1)*filter.PageSize)
 	if err != nil {
 		return diagnostics.Page{}, fmt.Errorf("list diagnostic runs: %w", err)
 	}
@@ -116,7 +122,8 @@ func (r *RunRepository) List(ctx context.Context, filter diagnostics.ListFilter)
 		var checks []string
 		var options []byte
 		if err := rows.Scan(
-			&run.ID, &run.TargetInput, &run.NormalizedHost, &run.NormalizedURL,
+			&run.ID, &run.WorkspaceID, &run.TargetInput,
+			&run.NormalizedHost, &run.NormalizedURL,
 			&run.Status, &checks, &options, &run.Summary, &run.CreatedAt,
 			&run.StartedAt, &run.CompletedAt, &run.CancelledAt,
 		); err != nil {

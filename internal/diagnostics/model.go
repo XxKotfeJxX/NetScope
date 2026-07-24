@@ -56,6 +56,7 @@ type RunOptions struct {
 
 type DiagnosticRun struct {
 	ID              uuid.UUID       `json:"id"`
+	WorkspaceID     uuid.UUID       `json:"workspaceId"`
 	TargetInput     string          `json:"target"`
 	NormalizedHost  string          `json:"normalizedHost"`
 	NormalizedURL   string          `json:"normalizedUrl,omitempty"`
@@ -86,9 +87,10 @@ type CheckResult struct {
 }
 
 type ListFilter struct {
-	Page     int
-	PageSize int
-	Status   RunStatus
+	WorkspaceID uuid.UUID
+	Page        int
+	PageSize    int
+	Status      RunStatus
 }
 
 type Page struct {

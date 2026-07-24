@@ -67,6 +67,7 @@ func NewRouter(deps Dependencies) http.Handler {
 	}
 	limiter := newRateLimiter(10, time.Minute)
 	router.Route("/api/v1", func(router chi.Router) {
+		router.Get("/capabilities", api.capabilities)
 		if deps.Identity != nil {
 			accounts := identityHandler{
 				service: deps.Identity, cookieSecure: deps.SessionCookieSecure,
@@ -80,38 +81,70 @@ func NewRouter(deps Dependencies) http.Handler {
 				router.Get("/workspaces", accounts.listWorkspaces)
 				router.Post("/workspaces", accounts.createWorkspace)
 			})
+			router.Group(func(router chi.Router) {
+				router.Use(accounts.requireAccount)
+				router.Use(accounts.requireWorkspace)
+				mountWorkspaceRoutes(router, api, limiter, accounts.requireRole)
+			})
+		} else {
+			mountWorkspaceRoutes(router, api, limiter, nil)
 		}
-		router.Get("/capabilities", api.capabilities)
-		router.With(limiter.middleware).Post("/runs", api.createRun)
-		router.Get("/runs", api.listRuns)
-		router.Get("/runs/{id}", api.getRun)
-		router.Post("/runs/{id}/cancel", api.cancelRun)
-		router.Get("/runs/{id}/events", api.runEvents)
-		router.Get("/runs/{id}/export", api.exportRun)
-		router.Get("/targets", api.listTargets)
-		router.With(limiter.middleware).Post("/targets", api.createTarget)
-		router.Get("/targets/{targetID}", api.getTarget)
-		router.Put("/targets/{targetID}", api.updateTarget)
-		router.Delete("/targets/{targetID}", api.deleteTarget)
-		router.Post("/targets/{targetID}/pause", api.pauseTarget)
-		router.Post("/targets/{targetID}/resume", api.resumeTarget)
-		router.Get("/targets/{targetID}/checks", api.listTargetChecks)
-		router.Get("/targets/{targetID}/maintenance", api.listMaintenanceWindows)
-		router.Post("/targets/{targetID}/maintenance", api.createMaintenanceWindow)
-		router.Delete(
-			"/targets/{targetID}/maintenance/{windowID}",
-			api.deleteMaintenanceWindow,
-		)
-		router.Get("/targets/{targetID}/notifications", api.listNotificationChannels)
-		router.Post("/targets/{targetID}/notifications", api.createNotificationChannel)
-		router.Delete(
-			"/targets/{targetID}/notifications/{channelID}",
-			api.deleteNotificationChannel,
-		)
-		router.Get("/monitoring", api.monitoringOverview)
 	})
 
 	return router
+}
+
+type roleGuard func(identity.Role) func(http.Handler) http.Handler
+
+func mountWorkspaceRoutes(
+	router chi.Router,
+	api apiHandler,
+	limiter *rateLimiter,
+	guard roleGuard,
+) {
+	operator := func(middlewares ...func(http.Handler) http.Handler) []func(
+		http.Handler,
+	) http.Handler {
+		result := make([]func(http.Handler) http.Handler, 0, len(middlewares)+1)
+		if guard != nil {
+			result = append(result, guard(identity.RoleOperator))
+		}
+		return append(result, middlewares...)
+	}
+
+	router.With(operator(limiter.middleware)...).Post("/runs", api.createRun)
+	router.Get("/runs", api.listRuns)
+	router.Get("/runs/{id}", api.getRun)
+	router.With(operator()...).Post("/runs/{id}/cancel", api.cancelRun)
+	router.Get("/runs/{id}/events", api.runEvents)
+	router.Get("/runs/{id}/export", api.exportRun)
+	router.Get("/targets", api.listTargets)
+	router.With(operator(limiter.middleware)...).Post("/targets", api.createTarget)
+	router.Get("/targets/{targetID}", api.getTarget)
+	router.With(operator()...).Put("/targets/{targetID}", api.updateTarget)
+	router.With(operator()...).Delete("/targets/{targetID}", api.deleteTarget)
+	router.With(operator()...).Post("/targets/{targetID}/pause", api.pauseTarget)
+	router.With(operator()...).Post("/targets/{targetID}/resume", api.resumeTarget)
+	router.Get("/targets/{targetID}/checks", api.listTargetChecks)
+	router.Get("/targets/{targetID}/maintenance", api.listMaintenanceWindows)
+	router.With(operator()...).Post(
+		"/targets/{targetID}/maintenance",
+		api.createMaintenanceWindow,
+	)
+	router.With(operator()...).Delete(
+		"/targets/{targetID}/maintenance/{windowID}",
+		api.deleteMaintenanceWindow,
+	)
+	router.Get("/targets/{targetID}/notifications", api.listNotificationChannels)
+	router.With(operator()...).Post(
+		"/targets/{targetID}/notifications",
+		api.createNotificationChannel,
+	)
+	router.With(operator()...).Delete(
+		"/targets/{targetID}/notifications/{channelID}",
+		api.deleteNotificationChannel,
+	)
+	router.Get("/monitoring", api.monitoringOverview)
 }
 
 func (h healthHandler) live(w http.ResponseWriter, _ *http.Request) {

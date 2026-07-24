@@ -2,6 +2,7 @@ import type {
   APIError,
   Capabilities,
   CheckType,
+  CurrentAccount,
   DiagnosticRun,
   MaintenanceWindow,
   MonitoredTarget,
@@ -12,6 +13,7 @@ import type {
   RunPage,
   TargetInput,
   TargetPage,
+  Workspace,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -29,10 +31,13 @@ export class NetScopeAPIError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const workspaceID = window.localStorage.getItem("netscope.workspace");
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       Accept: "application/json",
+      ...(workspaceID ? { "X-Workspace-ID": workspaceID } : {}),
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
@@ -54,6 +59,44 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   capabilities: () => request<Capabilities>("/api/v1/capabilities"),
+  register: (payload: {
+    email: string;
+    password: string;
+    displayName: string;
+    workspaceName: string;
+  }) =>
+    request<CurrentAccount>("/api/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  login: (payload: { email: string; password: string }) =>
+    request<CurrentAccount>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  logout: () =>
+    request<void>("/api/v1/auth/logout", {
+      method: "POST",
+    }),
+  currentAccount: async () => {
+    try {
+      return await request<CurrentAccount>("/api/v1/me");
+    } catch (error) {
+      if (
+        error instanceof NetScopeAPIError &&
+        error.code === "workspace_not_found"
+      ) {
+        window.localStorage.removeItem("netscope.workspace");
+        return request<CurrentAccount>("/api/v1/me");
+      }
+      throw error;
+    }
+  },
+  createWorkspace: (name: string) =>
+    request<Workspace>("/api/v1/workspaces", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
 
   createRun: (payload: {
     target: string;
@@ -79,9 +122,16 @@ export const api = {
   cancelRun: (id: string) =>
     request<void>(`/api/v1/runs/${id}/cancel`, { method: "POST" }),
 
-  eventURL: (id: string) => `${API_BASE}/api/v1/runs/${id}/events`,
-  exportURL: (id: string, format: "json" | "csv" = "json") =>
-    `${API_BASE}/api/v1/runs/${id}/export?format=${format}`,
+  eventURL: (id: string) => {
+    const query = workspaceQuery();
+    return `${API_BASE}/api/v1/runs/${id}/events${query ? `?${query}` : ""}`;
+  },
+  exportURL: (id: string, format: "json" | "csv" = "json") => {
+    const query = new URLSearchParams({ format });
+    const workspaceID = window.localStorage.getItem("netscope.workspace");
+    if (workspaceID) query.set("workspaceId", workspaceID);
+    return `${API_BASE}/api/v1/runs/${id}/export?${query}`;
+  },
 
   listTargets: () => request<TargetPage>("/api/v1/targets?page=1&pageSize=100"),
   createTarget: (payload: TargetInput) =>
@@ -136,3 +186,9 @@ export const api = {
   monitoringOverview: () =>
     request<MonitoringOverview>("/api/v1/monitoring?limit=100"),
 };
+
+function workspaceQuery() {
+  const workspaceID = window.localStorage.getItem("netscope.workspace");
+  if (!workspaceID) return "";
+  return new URLSearchParams({ workspaceId: workspaceID }).toString();
+}

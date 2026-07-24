@@ -51,6 +51,14 @@ func (r *IdentityRepository) CreateRegistration(
 	if err := insertMembership(ctx, transaction, membership); err != nil {
 		return err
 	}
+	for _, statement := range []string{
+		`UPDATE diagnostic_runs SET workspace_id = $1 WHERE workspace_id IS NULL`,
+		`UPDATE monitored_targets SET workspace_id = $1 WHERE workspace_id IS NULL`,
+	} {
+		if _, err := transaction.Exec(ctx, statement, workspace.ID); err != nil {
+			return fmt.Errorf("claim legacy workspace resources: %w", err)
+		}
+	}
 	if err := insertSession(ctx, transaction, session); err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 )
 
 type Alert struct {
@@ -116,7 +117,13 @@ func (s *Scheduler) dispatch(ctx context.Context) error {
 		return err
 	}
 	for _, target := range targets {
-		run, err := s.runs.Create(ctx, target.Address, target.Checks, target.Options)
+		run, err := s.runs.CreateInWorkspace(
+			ctx,
+			target.WorkspaceID,
+			target.Address,
+			target.Checks,
+			target.Options,
+		)
 		if err != nil {
 			updated, notify, recordErr := s.repository.RecordDispatchFailure(
 				ctx,
@@ -157,7 +164,7 @@ func (s *Scheduler) reconcile(ctx context.Context) error {
 		if pending.RunID == nil {
 			continue
 		}
-		run, err := s.runs.Get(ctx, *pending.RunID)
+		run, err := s.runs.Get(identity.WithSystemAccess(ctx), *pending.RunID)
 		if err != nil {
 			s.logger.Error(
 				"load scheduled diagnostic run",

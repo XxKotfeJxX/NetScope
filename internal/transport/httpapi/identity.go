@@ -144,6 +144,54 @@ func (h identityHandler) requireAccount(
 	})
 }
 
+func (h identityHandler) requireWorkspace(
+	next http.Handler,
+) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		account, ok := accountFromContext(r.Context())
+		if !ok {
+			writeAPIError(w, r, identity.ErrUnauthenticated)
+			return
+		}
+		requestedWorkspace := strings.TrimSpace(r.Header.Get("X-Workspace-ID"))
+		if requestedWorkspace == "" {
+			requestedWorkspace = strings.TrimSpace(r.URL.Query().Get("workspaceId"))
+		}
+		principal, err := h.service.SelectWorkspace(
+			r.Context(),
+			account,
+			requestedWorkspace,
+		)
+		if err != nil {
+			writeAPIError(w, r, err)
+			return
+		}
+		next.ServeHTTP(
+			w,
+			r.WithContext(identity.WithPrincipal(r.Context(), principal)),
+		)
+	})
+}
+
+func (h identityHandler) requireRole(
+	required identity.Role,
+) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			principal, ok := identity.PrincipalFromContext(r.Context())
+			if !ok {
+				writeAPIError(w, r, identity.ErrUnauthenticated)
+				return
+			}
+			if !identity.RoleAtLeast(principal.Workspace.Role, required) {
+				writeAPIError(w, r, identity.ErrForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 func (h identityHandler) setSessionCookie(
 	w http.ResponseWriter,
 	token string,

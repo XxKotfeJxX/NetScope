@@ -15,7 +15,7 @@ var (
 type Repository interface {
 	CreateTarget(context.Context, Target) error
 	GetTarget(context.Context, uuid.UUID) (Target, error)
-	ListTargets(context.Context, int, int) (Page, error)
+	ListTargets(context.Context, uuid.UUID, int, int) (Page, error)
 	UpdateTarget(context.Context, Target) error
 	DeleteTarget(context.Context, uuid.UUID) error
 	SetTargetEnabled(context.Context, uuid.UUID, bool) error
@@ -31,5 +31,5 @@ type Repository interface {
 	ListPendingChecks(context.Context, int) ([]Check, error)
 	CompleteCheck(context.Context, Check) (Target, bool, error)
 	RecordDispatchFailure(context.Context, uuid.UUID, string) (Target, bool, error)
-	Overview(context.Context, int) (Overview, error)
+	Overview(context.Context, uuid.UUID, int) (Overview, error)
 }

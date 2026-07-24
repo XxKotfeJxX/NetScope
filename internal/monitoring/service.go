@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/google/uuid"
 )
@@ -29,6 +30,13 @@ type RunService interface {
 		[]diagnostics.CheckType,
 		diagnostics.RunOptions,
 	) (diagnostics.DiagnosticRun, error)
+	CreateInWorkspace(
+		context.Context,
+		uuid.UUID,
+		string,
+		[]diagnostics.CheckType,
+		diagnostics.RunOptions,
+	) (diagnostics.DiagnosticRun, error)
 	Get(context.Context, uuid.UUID) (diagnostics.DiagnosticRun, error)
 }
 
@@ -40,13 +48,18 @@ func (s *Service) CreateTarget(
 	ctx context.Context,
 	input TargetInput,
 ) (Target, error) {
+	workspaceID, err := identity.WorkspaceID(ctx)
+	if err != nil {
+		return Target{}, err
+	}
 	normalized, err := s.normalizeInput(input)
 	if err != nil {
 		return Target{}, err
 	}
 	now := time.Now().UTC()
 	created := Target{
-		ID: uuid.New(), Name: normalized.Name, Address: normalized.Address,
+		ID: uuid.New(), WorkspaceID: workspaceID,
+		Name: normalized.Name, Address: normalized.Address,
 		Tags: normalized.Tags, Checks: normalized.Checks, Options: normalized.Options,
 		IntervalSeconds: normalized.IntervalSeconds, Enabled: true,
 		FailureThreshold: normalized.FailureThreshold, Status: StatusPending,
@@ -59,7 +72,14 @@ func (s *Service) CreateTarget(
 }
 
 func (s *Service) GetTarget(ctx context.Context, id uuid.UUID) (Target, error) {
-	return s.repository.GetTarget(ctx, id)
+	target, err := s.repository.GetTarget(ctx, id)
+	if err != nil {
+		return Target{}, err
+	}
+	if err := identity.AuthorizeWorkspace(ctx, target.WorkspaceID); err != nil {
+		return Target{}, err
+	}
+	return target, nil
 }
 
 func (s *Service) ListTargets(
@@ -67,7 +87,11 @@ func (s *Service) ListTargets(
 	page int,
 	pageSize int,
 ) (Page, error) {
-	return s.repository.ListTargets(ctx, page, pageSize)
+	workspaceID, err := identity.WorkspaceID(ctx)
+	if err != nil {
+		return Page{}, err
+	}
+	return s.repository.ListTargets(ctx, workspaceID, page, pageSize)
 }
 
 func (s *Service) UpdateTarget(
@@ -79,7 +103,7 @@ func (s *Service) UpdateTarget(
 	if err != nil {
 		return Target{}, err
 	}
-	existing, err := s.repository.GetTarget(ctx, id)
+	existing, err := s.GetTarget(ctx, id)
 	if err != nil {
 		return Target{}, err
 	}
@@ -98,6 +122,9 @@ func (s *Service) UpdateTarget(
 }
 
 func (s *Service) DeleteTarget(ctx context.Context, id uuid.UUID) error {
+	if _, err := s.GetTarget(ctx, id); err != nil {
+		return err
+	}
 	return s.repository.DeleteTarget(ctx, id)
 }
 
@@ -106,6 +133,9 @@ func (s *Service) SetTargetEnabled(
 	id uuid.UUID,
 	enabled bool,
 ) error {
+	if _, err := s.GetTarget(ctx, id); err != nil {
+		return err
+	}
 	return s.repository.SetTargetEnabled(ctx, id, enabled)
 }
 
@@ -115,14 +145,18 @@ func (s *Service) ListChecks(
 	page int,
 	pageSize int,
 ) (CheckPage, error) {
-	if _, err := s.repository.GetTarget(ctx, targetID); err != nil {
+	if _, err := s.GetTarget(ctx, targetID); err != nil {
 		return CheckPage{}, err
 	}
 	return s.repository.ListChecks(ctx, targetID, page, pageSize)
 }
 
 func (s *Service) Overview(ctx context.Context, limit int) (Overview, error) {
-	return s.repository.Overview(ctx, limit)
+	workspaceID, err := identity.WorkspaceID(ctx)
+	if err != nil {
+		return Overview{}, err
+	}
+	return s.repository.Overview(ctx, workspaceID, limit)
 }
 
 func (s *Service) CreateMaintenanceWindow(
@@ -138,7 +172,7 @@ func (s *Service) CreateMaintenanceWindow(
 			ErrInvalidTarget,
 		)
 	}
-	if _, err := s.repository.GetTarget(ctx, targetID); err != nil {
+	if _, err := s.GetTarget(ctx, targetID); err != nil {
 		return MaintenanceWindow{}, err
 	}
 	window := MaintenanceWindow{
@@ -156,6 +190,9 @@ func (s *Service) ListMaintenanceWindows(
 	ctx context.Context,
 	targetID uuid.UUID,
 ) ([]MaintenanceWindow, error) {
+	if _, err := s.GetTarget(ctx, targetID); err != nil {
+		return nil, err
+	}
 	return s.repository.ListMaintenanceWindows(ctx, targetID)
 }
 
@@ -164,6 +201,9 @@ func (s *Service) DeleteMaintenanceWindow(
 	targetID uuid.UUID,
 	id uuid.UUID,
 ) error {
+	if _, err := s.GetTarget(ctx, targetID); err != nil {
+		return err
+	}
 	return s.repository.DeleteMaintenanceWindow(ctx, targetID, id)
 }
 
@@ -197,7 +237,7 @@ func (s *Service) CreateNotificationChannel(
 			ErrInvalidTarget,
 		)
 	}
-	if _, err := s.repository.GetTarget(ctx, targetID); err != nil {
+	if _, err := s.GetTarget(ctx, targetID); err != nil {
 		return NotificationChannel{}, err
 	}
 	channel := NotificationChannel{
@@ -214,6 +254,9 @@ func (s *Service) ListNotificationChannels(
 	ctx context.Context,
 	targetID uuid.UUID,
 ) ([]NotificationChannel, error) {
+	if _, err := s.GetTarget(ctx, targetID); err != nil {
+		return nil, err
+	}
 	return s.repository.ListNotificationChannels(ctx, targetID)
 }
 
@@ -222,6 +265,9 @@ func (s *Service) DeleteNotificationChannel(
 	targetID uuid.UUID,
 	id uuid.UUID,
 ) error {
+	if _, err := s.GetTarget(ctx, targetID); err != nil {
+		return err
+	}
 	return s.repository.DeleteNotificationChannel(ctx, targetID, id)
 }
 

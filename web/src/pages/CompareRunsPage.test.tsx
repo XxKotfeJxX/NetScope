@@ -24,6 +24,7 @@ function run(
 ): DiagnosticRun {
   return {
     id,
+    workspaceId: "workspace",
     target: "example.com",
     normalizedHost: "example.com",
     status: "completed",
