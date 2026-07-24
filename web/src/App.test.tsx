@@ -267,6 +267,42 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: /return to your workspace/i }),
     ).toBeInTheDocument();
+    expect(screen.queryByText("Session expired")).not.toBeInTheDocument();
+  });
+
+  it("removes stale account chrome when a protected request rejects the session", async () => {
+    const authenticatedFetch = vi.mocked(fetch);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        if (String(input).includes("/api/v1/runs?")) {
+          return {
+            ok: false,
+            status: 401,
+            json: async () => ({
+              error: {
+                code: "authentication_required",
+                message: "Sign in to continue.",
+              },
+            }),
+          } as Response;
+        }
+        return authenticatedFetch(input);
+      }),
+    );
+
+    renderApp("/history");
+
+    expect(await screen.findByText("Session expired")).toBeInTheDocument();
+    expect(
+      screen.getByText(/server no longer accepts this session/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: /diagnostic history/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("navigation", { name: /main navigation/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders workspace membership administration", async () => {

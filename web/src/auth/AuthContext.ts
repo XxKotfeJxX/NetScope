@@ -4,6 +4,7 @@ import type { CurrentAccount } from "../api/types";
 export interface AuthContextValue {
   account?: CurrentAccount;
   loading: boolean;
+  sessionExpired: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (input: {
     email: string;

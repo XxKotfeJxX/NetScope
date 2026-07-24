@@ -26,6 +26,7 @@ import type {
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
+export const SESSION_INVALIDATED_EVENT = "netscope:session-invalidated";
 
 export class NetScopeAPIError extends Error {
   readonly code: string;
@@ -58,7 +59,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         message: "NetScope could not complete the request.",
       },
     }))) as APIError;
-    throw new NetScopeAPIError(payload);
+    const error = new NetScopeAPIError(payload);
+    if (
+      path !== "/api/v1/me" &&
+      response.status === 401 &&
+      error.code === "authentication_required"
+    ) {
+      window.dispatchEvent(new Event(SESSION_INVALIDATED_EVENT));
+    }
+    throw error;
   }
   if (response.status === 204) {
     return undefined as T;

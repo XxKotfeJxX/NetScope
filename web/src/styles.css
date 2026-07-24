@@ -1766,8 +1766,10 @@ p {
 
 .target-create {
   margin: 28px 0 40px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
 }
 
 .target-create > summary {
@@ -1792,6 +1794,13 @@ p {
   align-items: end;
   gap: 12px;
   margin-top: 18px;
+}
+
+.target-create .primary-button {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  border-radius: 4px;
 }
 
 .target-create label {
@@ -2182,7 +2191,7 @@ p {
   }
 
   .target-create .primary-button {
-    width: auto;
+    width: 100%;
   }
 
   .target-config-grid {
@@ -2725,6 +2734,23 @@ p {
   font-size: 27px;
   font-weight: 500;
   letter-spacing: -0.025em;
+}
+
+.auth-notice {
+  display: grid;
+  gap: 4px;
+  margin: -8px 0 18px;
+  padding: 11px 12px;
+  color: var(--warning);
+  font-size: 11px;
+  line-height: 1.5;
+  border: 1px solid color-mix(in srgb, var(--warning) 42%, transparent);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warning) 7%, transparent);
+}
+
+.auth-notice strong {
+  font-weight: 500;
 }
 
 .auth-panel form {
