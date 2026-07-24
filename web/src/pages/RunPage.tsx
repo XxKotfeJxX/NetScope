@@ -32,6 +32,17 @@ export function RunPage() {
     mutationFn: () => api.cancelRun(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["run", id] }),
   });
+  const rerun = useMutation({
+    mutationFn: () => {
+      if (!run.data) throw new Error("Diagnostic run is unavailable.");
+      return api.createRun({
+        target: run.data.target,
+        checks: run.data.checks,
+        options: run.data.options,
+      });
+    },
+    onSuccess: (created) => navigate(`/runs/${created.id}`),
+  });
 
   useEffect(() => {
     if (!id || typeof EventSource === "undefined") return;
@@ -131,9 +142,22 @@ export function RunPage() {
             <a className="text-button" href={api.exportURL(id)}>
               Download JSON
             </a>
-            <Link className="text-button" to={`/?target=${data.target}`}>
-              Run again
+            <a className="text-button" href={api.exportURL(id, "csv")}>
+              Download CSV
+            </a>
+            <Link className="text-button" to={`/runs/compare?left=${data.id}`}>
+              Compare run
             </Link>
+            <button
+              className="text-button"
+              onClick={() => rerun.mutate()}
+              disabled={rerun.isPending}
+            >
+              {rerun.isPending ? "Starting…" : "Run again"}
+            </button>
+            {rerun.error && (
+              <span className="field-error">{rerun.error.message}</span>
+            )}
           </div>
         </aside>
 
