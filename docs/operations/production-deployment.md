@@ -12,9 +12,10 @@ single-host baseline.
 - outbound DNS, HTTP, HTTPS, SMTP (when configured), and ICMP (when enabled);
 - an encrypted off-host location for database backups.
 
-The production topology publishes only Caddy. PostgreSQL and the API use an
-internal Docker network. Caddy obtains and renews TLS certificates
-automatically.
+The production topology publishes only Caddy. PostgreSQL and the API share a
+private backend network; the API also has a dedicated outbound network for
+public diagnostics, while no API port is published on the host. Caddy obtains
+and renews TLS certificates automatically.
 
 ## Configure
 
@@ -34,6 +35,7 @@ The production compose file forces:
 - a read-only API filesystem, dropped capabilities except `NET_RAW`, and
   `no-new-privileges`;
 - trusted client-IP forwarding only from Caddy on the private backend network;
+- isolated database traffic plus outbound API connectivity for public probes;
 - bounded container logs and health-gated startup;
 - private `/readyz` and `/metrics` paths at the public proxy;
 - HSTS, CSP, anti-framing, MIME, referrer, and browser permissions headers.
