@@ -31,17 +31,53 @@ describe("App", () => {
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
         const path = String(input);
-        const data = path.includes("/api/v1/me")
+        const data = path.includes("/api/v1/public/reports/")
           ? {
-              user: {
-                id: "user",
-                email: "owner@example.com",
-                displayName: "Acme Owner",
+              workspaceName: "Acme Production",
+              publishedAt: "2026-07-24T10:00:00Z",
+              expiresAt: "2026-08-24T10:00:00Z",
+              run: {
+                id: "run-public",
+                workspaceId: "workspace",
+                target: "example.com",
+                normalizedHost: "example.com",
+                status: "completed",
+                checks: ["dns"],
+                options: {
+                  timeoutMs: 5000,
+                  httpMethod: "GET",
+                  followRedirects: true,
+                  maxRedirects: 5,
+                  ipVersion: "auto",
+                  pingPackets: 4,
+                  maxHops: 20,
+                },
+                results: [],
                 createdAt: "2026-07-24T10:00:00Z",
-                updatedAt: "2026-07-24T10:00:00Z",
+                completedAt: "2026-07-24T10:00:01Z",
               },
-              workspaces: [
-                {
+            }
+          : path.includes("/api/v1/me")
+            ? {
+                user: {
+                  id: "user",
+                  email: "owner@example.com",
+                  displayName: "Acme Owner",
+                  createdAt: "2026-07-24T10:00:00Z",
+                  updatedAt: "2026-07-24T10:00:00Z",
+                },
+                workspaces: [
+                  {
+                    id: "workspace",
+                    name: "Acme Production",
+                    slug: "acme-production",
+                    role: "owner",
+                    createdBy: "user",
+                    createdAt: "2026-07-24T10:00:00Z",
+                    updatedAt: "2026-07-24T10:00:00Z",
+                  },
+                ],
+                activeWorkspace: {
                   id: "workspace",
                   name: "Acme Production",
                   slug: "acme-production",
@@ -50,57 +86,47 @@ describe("App", () => {
                   createdAt: "2026-07-24T10:00:00Z",
                   updatedAt: "2026-07-24T10:00:00Z",
                 },
-              ],
-              activeWorkspace: {
-                id: "workspace",
-                name: "Acme Production",
-                slug: "acme-production",
-                role: "owner",
-                createdBy: "user",
-                createdAt: "2026-07-24T10:00:00Z",
-                updatedAt: "2026-07-24T10:00:00Z",
-              },
-              sessionExpiresAt: "2026-08-24T10:00:00Z",
-            }
-          : path.includes("/api/v1/workspace/members")
-            ? [
-                {
-                  userId: "user",
-                  email: "owner@example.com",
-                  displayName: "Acme Owner",
-                  role: "owner",
-                  joinedAt: "2026-07-24T10:00:00Z",
-                },
-              ]
-            : path.includes("/api/v1/workspace/api-keys")
-              ? []
-              : path.includes("/api/v1/workspace/audit")
-                ? {
-                    items: [],
-                    page: 1,
-                    pageSize: 20,
-                    totalItems: 0,
-                    totalPages: 0,
-                  }
-                : path.includes("capabilities")
+                sessionExpiresAt: "2026-08-24T10:00:00Z",
+              }
+            : path.includes("/api/v1/workspace/members")
+              ? [
+                  {
+                    userId: "user",
+                    email: "owner@example.com",
+                    displayName: "Acme Owner",
+                    role: "owner",
+                    joinedAt: "2026-07-24T10:00:00Z",
+                  },
+                ]
+              : path.includes("/api/v1/workspace/api-keys")
+                ? []
+                : path.includes("/api/v1/workspace/audit")
                   ? {
-                      version: "test",
-                      checks: { dns: { available: true } },
-                      runtime: {
-                        defaultTimeoutMs: 5000,
-                        maxTimeoutMs: 30000,
-                        runWorkers: 4,
-                        probeConcurrency: 8,
-                        networkPolicy: "local",
-                      },
-                    }
-                  : {
                       items: [],
                       page: 1,
-                      pageSize: 5,
+                      pageSize: 20,
                       totalItems: 0,
                       totalPages: 0,
-                    };
+                    }
+                  : path.includes("capabilities")
+                    ? {
+                        version: "test",
+                        checks: { dns: { available: true } },
+                        runtime: {
+                          defaultTimeoutMs: 5000,
+                          maxTimeoutMs: 30000,
+                          runWorkers: 4,
+                          probeConcurrency: 8,
+                          networkPolicy: "local",
+                        },
+                      }
+                    : {
+                        items: [],
+                        page: 1,
+                        pageSize: 5,
+                        totalItems: 0,
+                        totalPages: 0,
+                      };
         return {
           ok: true,
           status: 200,
@@ -182,6 +208,21 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /create key/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("renders a public report without an account gate", async () => {
+    renderApp("/shared/public-token");
+
+    expect(
+      await screen.findByRole("heading", {
+        level: 1,
+        name: "example.com",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/published evidence/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/read-only technical evidence/i),
     ).toBeInTheDocument();
   });
 });

@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { useAuth } from "./auth/AuthContext";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -11,9 +11,19 @@ import { TargetDetailPage } from "./pages/TargetDetailPage";
 import { TargetsPage } from "./pages/TargetsPage";
 import { AuthPage } from "./pages/AuthPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
+import { PublicReportPage } from "./pages/PublicReportPage";
 
 export function App() {
   const { account, loading } = useAuth();
+  const location = useLocation();
+
+  if (location.pathname.startsWith("/shared/")) {
+    return (
+      <Routes>
+        <Route path="/shared/:token" element={<PublicReportPage />} />
+      </Routes>
+    );
+  }
 
   if (loading) {
     return (

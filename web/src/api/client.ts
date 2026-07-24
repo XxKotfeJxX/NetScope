@@ -4,6 +4,7 @@ import type {
   Capabilities,
   CheckType,
   CreatedWorkspaceAPIKey,
+  CreatedPublicReportLink,
   CurrentAccount,
   DiagnosticRun,
   MaintenanceWindow,
@@ -11,6 +12,9 @@ import type {
   MonitoringCheckPage,
   MonitoringOverview,
   NotificationChannel,
+  PublicReport,
+  PublicReportLink,
+  ReportComment,
   RunOptions,
   RunPage,
   TargetInput,
@@ -147,6 +151,32 @@ export const api = {
     }),
 
   getRun: (id: string) => request<DiagnosticRun>(`/api/v1/runs/${id}`),
+  runComments: (id: string) =>
+    request<ReportComment[]>(`/api/v1/runs/${id}/comments`),
+  createRunComment: (id: string, body: string) =>
+    request<ReportComment>(`/api/v1/runs/${id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  deleteRunComment: (runID: string, commentID: string) =>
+    request<void>(`/api/v1/runs/${runID}/comments/${commentID}`, {
+      method: "DELETE",
+    }),
+  publicReportLinks: (id: string) =>
+    request<PublicReportLink[]>(`/api/v1/runs/${id}/public-links`),
+  createPublicReportLink: (id: string, expiresAt?: string) =>
+    request<CreatedPublicReportLink>(`/api/v1/runs/${id}/public-links`, {
+      method: "POST",
+      body: JSON.stringify(expiresAt ? { expiresAt } : {}),
+    }),
+  revokePublicReportLink: (runID: string, linkID: string) =>
+    request<void>(`/api/v1/runs/${runID}/public-links/${linkID}`, {
+      method: "DELETE",
+    }),
+  publicReport: (token: string) =>
+    request<PublicReport>(
+      `/api/v1/public/reports/${encodeURIComponent(token)}`,
+    ),
 
   listRuns: (page = 1, pageSize = 20, status = "") => {
     const query = new URLSearchParams({
