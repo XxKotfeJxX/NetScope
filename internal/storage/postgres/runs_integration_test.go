@@ -34,7 +34,10 @@ func TestRunRepositoryLifecycle(t *testing.T) {
 		t.Fatalf("NewWithConfig() error = %v", err)
 	}
 	defer pool.Close()
-	if _, err := pool.Exec(ctx, "TRUNCATE check_results, diagnostic_runs"); err != nil {
+	if _, err := pool.Exec(ctx, `
+		TRUNCATE notification_channels, maintenance_windows, monitoring_checks,
+			monitored_targets, check_results, diagnostic_runs
+	`); err != nil {
 		t.Fatalf("truncate test tables: %v", err)
 	}
 

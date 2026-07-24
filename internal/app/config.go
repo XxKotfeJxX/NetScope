@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net/mail"
 	"os"
 	"strconv"
 	"strings"
@@ -29,6 +30,14 @@ type Config struct {
 	AllowPrivate        bool
 	AllowLinkLocal      bool
 	ICMPEnabled         bool
+	MonitoringInterval  time.Duration
+	NotificationTimeout time.Duration
+	SMTPHost            string
+	SMTPPort            int
+	SMTPUsername        string
+	SMTPPassword        string
+	SMTPFrom            string
+	SMTPTLSMode         string
 	LogLevel            slog.Level
 	LogFormat           string
 }
@@ -44,6 +53,13 @@ func LoadConfig() (Config, error) {
 		LogFormat:           envString("LOG_FORMAT", "json"),
 		DefaultProbeTimeout: 5 * time.Second,
 		MaxProbeTimeout:     30 * time.Second,
+		MonitoringInterval:  10 * time.Second,
+		NotificationTimeout: 10 * time.Second,
+		SMTPHost:            strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPUsername:        strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		SMTPPassword:        os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:            strings.TrimSpace(os.Getenv("SMTP_FROM")),
+		SMTPTLSMode:         envString("SMTP_TLS_MODE", "starttls"),
 		LogLevel:            slog.LevelInfo,
 	}
 
@@ -75,6 +91,21 @@ func LoadConfig() (Config, error) {
 	if cfg.MaxProbeTimeout, err = envDuration("MAX_PROBE_TIMEOUT", 30*time.Second); err != nil {
 		return Config{}, err
 	}
+	if cfg.MonitoringInterval, err = envDuration(
+		"MONITORING_POLL_INTERVAL",
+		10*time.Second,
+	); err != nil {
+		return Config{}, err
+	}
+	if cfg.NotificationTimeout, err = envDuration(
+		"NOTIFICATION_TIMEOUT",
+		10*time.Second,
+	); err != nil {
+		return Config{}, err
+	}
+	if cfg.SMTPPort, err = envInt("SMTP_PORT", 587, 1, 65535); err != nil {
+		return Config{}, err
+	}
 	if cfg.DefaultProbeTimeout > cfg.MaxProbeTimeout {
 		return Config{}, fmt.Errorf("DEFAULT_PROBE_TIMEOUT must not exceed MAX_PROBE_TIMEOUT")
 	}
@@ -92,6 +123,24 @@ func LoadConfig() (Config, error) {
 	}
 	if cfg.NetworkPolicy != "local" && cfg.NetworkPolicy != "public" {
 		return Config{}, fmt.Errorf("NETWORK_POLICY must be local or public")
+	}
+	if cfg.SMTPTLSMode != "starttls" &&
+		cfg.SMTPTLSMode != "tls" &&
+		cfg.SMTPTLSMode != "none" {
+		return Config{}, fmt.Errorf("SMTP_TLS_MODE must be starttls, tls, or none")
+	}
+	if (cfg.SMTPHost == "") != (cfg.SMTPFrom == "") {
+		return Config{}, fmt.Errorf("SMTP_HOST and SMTP_FROM must be configured together")
+	}
+	if cfg.SMTPFrom != "" {
+		if _, err := mail.ParseAddress(cfg.SMTPFrom); err != nil {
+			return Config{}, fmt.Errorf("SMTP_FROM must be a valid email address")
+		}
+	}
+	if (cfg.SMTPUsername == "") != (cfg.SMTPPassword == "") {
+		return Config{}, fmt.Errorf(
+			"SMTP_USERNAME and SMTP_PASSWORD must be configured together",
+		)
 	}
 	if err := cfg.LogLevel.UnmarshalText([]byte(envString("LOG_LEVEL", "info"))); err != nil {
 		return Config{}, fmt.Errorf("LOG_LEVEL: %w", err)

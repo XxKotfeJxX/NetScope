@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 )
 
@@ -76,6 +77,14 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusServiceUnavailable
 		code = "run_queue_full"
 		message = "The diagnostic queue is full. Try again shortly."
+	case errors.Is(err, monitoring.ErrInvalidTarget):
+		status = http.StatusBadRequest
+		code = "invalid_monitored_target"
+		message = err.Error()
+	case errors.Is(err, monitoring.ErrTargetNotFound):
+		status = http.StatusNotFound
+		code = "monitored_target_not_found"
+		message = "The monitored target or nested resource was not found."
 	}
 
 	writeJSON(w, status, errorEnvelope{Error: apiError{

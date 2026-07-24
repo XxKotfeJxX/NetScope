@@ -1,6 +1,6 @@
-import type { CheckStatus, RunStatus } from "../api/types";
+import type { CheckStatus, RunStatus, TargetStatus } from "../api/types";
 
-type DisplayStatus = RunStatus | CheckStatus | "skipped";
+type DisplayStatus = RunStatus | CheckStatus | TargetStatus | "skipped";
 
 const statusMeta: Record<DisplayStatus, { symbol: string; label: string }> = {
   queued: { symbol: "○", label: "Queued" },
@@ -14,6 +14,10 @@ const statusMeta: Record<DisplayStatus, { symbol: string; label: string }> = {
   passed: { symbol: "●", label: "Passed" },
   warning: { symbol: "△", label: "Warning" },
   skipped: { symbol: "○", label: "Skipped" },
+  operational: { symbol: "●", label: "Operational" },
+  unavailable: { symbol: "×", label: "Unavailable" },
+  paused: { symbol: "○", label: "Paused" },
+  maintenance: { symbol: "◇", label: "Maintenance" },
 };
 
 export function StatusBadge({ status }: { status: DisplayStatus }) {

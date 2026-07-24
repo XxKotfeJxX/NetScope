@@ -11,20 +11,22 @@ import (
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Dependencies struct {
-	Logger    *slog.Logger
-	Pool      *pgxpool.Pool
-	Version   string
-	WebOrigin string
-	Runs      *diagnostics.Service
-	Events    diagnostics.EventPublisher
-	Runtime   RuntimeInfo
-	Checks    map[string]Capability
+	Logger     *slog.Logger
+	Pool       *pgxpool.Pool
+	Version    string
+	WebOrigin  string
+	Runs       *diagnostics.Service
+	Events     diagnostics.EventPublisher
+	Runtime    RuntimeInfo
+	Checks     map[string]Capability
+	Monitoring *monitoring.Service
 }
 
 type Capability struct {
@@ -58,7 +60,7 @@ func NewRouter(deps Dependencies) http.Handler {
 
 	api := apiHandler{
 		runs: deps.Runs, events: deps.Events, version: deps.Version,
-		runtime: deps.Runtime, checks: deps.Checks,
+		runtime: deps.Runtime, checks: deps.Checks, monitoring: deps.Monitoring,
 	}
 	limiter := newRateLimiter(10, time.Minute)
 	router.Route("/api/v1", func(router chi.Router) {
@@ -69,6 +71,27 @@ func NewRouter(deps Dependencies) http.Handler {
 		router.Post("/runs/{id}/cancel", api.cancelRun)
 		router.Get("/runs/{id}/events", api.runEvents)
 		router.Get("/runs/{id}/export", api.exportRun)
+		router.Get("/targets", api.listTargets)
+		router.With(limiter.middleware).Post("/targets", api.createTarget)
+		router.Get("/targets/{targetID}", api.getTarget)
+		router.Put("/targets/{targetID}", api.updateTarget)
+		router.Delete("/targets/{targetID}", api.deleteTarget)
+		router.Post("/targets/{targetID}/pause", api.pauseTarget)
+		router.Post("/targets/{targetID}/resume", api.resumeTarget)
+		router.Get("/targets/{targetID}/checks", api.listTargetChecks)
+		router.Get("/targets/{targetID}/maintenance", api.listMaintenanceWindows)
+		router.Post("/targets/{targetID}/maintenance", api.createMaintenanceWindow)
+		router.Delete(
+			"/targets/{targetID}/maintenance/{windowID}",
+			api.deleteMaintenanceWindow,
+		)
+		router.Get("/targets/{targetID}/notifications", api.listNotificationChannels)
+		router.Post("/targets/{targetID}/notifications", api.createNotificationChannel)
+		router.Delete(
+			"/targets/{targetID}/notifications/{channelID}",
+			api.deleteNotificationChannel,
+		)
+		router.Get("/monitoring", api.monitoringOverview)
 	})
 
 	return router
@@ -149,7 +172,7 @@ func cors(origin string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-ID")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 			w.Header().Add("Vary", "Origin")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)

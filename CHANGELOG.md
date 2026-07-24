@@ -5,6 +5,27 @@ Versioning and uses the Keep a Changelog format.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-24
+
+### Added
+
+- Saved monitoring targets with names, tags, configurable checks, intervals,
+  and consecutive-failure thresholds.
+- A scheduler that claims due targets safely, launches diagnostic runs, and
+  records availability, latency, failure context, and TLS expiry.
+- Target pause/resume controls and scheduled maintenance windows.
+- Targets atlas, detailed status timeline, latency trend, and live monitoring
+  journal in the Technical Atlas interface.
+- Per-target email and webhook notification channels for outage and recovery
+  events.
+- SMTP delivery with STARTTLS, implicit TLS, optional authentication, bounded
+  timeouts, and sanitized message headers.
+
+### Security
+
+- Webhook delivery rejects redirects and credentials in URLs and uses the
+  SSRF-resistant secure dialer with the configured network policy.
+
 ## [0.2.0] - 2026-07-24
 
 ### Added

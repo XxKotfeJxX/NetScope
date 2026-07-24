@@ -19,6 +19,8 @@ export function Layout() {
           <NavLink to="/" end>
             Diagnose
           </NavLink>
+          <NavLink to="/targets">Targets</NavLink>
+          <NavLink to="/monitoring">Monitoring</NavLink>
           <NavLink to="/history">History</NavLink>
           <NavLink to="/settings">Runtime</NavLink>
           <a
