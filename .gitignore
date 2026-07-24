@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Local tools and editor state
 .tools/
@@ -20,6 +21,7 @@ netscope.exe
 web/node_modules/
 web/dist/
 web/coverage/
+backups/
 
 # OS files
 .DS_Store
