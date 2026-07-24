@@ -1,11 +1,23 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useMemo } from "react";
-import { api, NetScopeAPIError } from "../api/client";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  api,
+  NetScopeAPIError,
+  SESSION_INVALIDATED_EVENT,
+} from "../api/client";
 import type { CurrentAccount } from "../api/types";
 import { AuthContext, type AuthContextValue } from "./AuthContext";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
   const current = useQuery({
     queryKey: ["account"],
     queryFn: api.currentAccount,
@@ -15,6 +27,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const acceptAccount = useCallback(
     (account: CurrentAccount) => {
+      setSessionExpired(false);
+      setSignedOut(false);
       window.localStorage.setItem(
         "netscope.workspace",
         account.activeWorkspace.id,
@@ -45,11 +59,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await api.logout();
+    setSessionExpired(false);
+    setSignedOut(true);
     window.localStorage.removeItem("netscope.workspace");
     queryClient.setQueryData(["account"], undefined);
     queryClient.removeQueries({
       predicate: (query) => query.queryKey[0] !== "capabilities",
     });
+  }, [queryClient]);
+
+  useEffect(() => {
+    const invalidateSession = () => {
+      setSessionExpired(true);
+      setSignedOut(true);
+      window.localStorage.removeItem("netscope.workspace");
+      void queryClient.cancelQueries();
+      queryClient.removeQueries({
+        predicate: (query) =>
+          query.queryKey[0] !== "account" &&
+          query.queryKey[0] !== "capabilities",
+      });
+    };
+    window.addEventListener(SESSION_INVALIDATED_EVENT, invalidateSession);
+    return () =>
+      window.removeEventListener(SESSION_INVALIDATED_EVENT, invalidateSession);
   }, [queryClient]);
 
   const selectWorkspace = useCallback(
@@ -70,14 +103,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const account =
-    current.error instanceof NetScopeAPIError &&
-    current.error.code === "authentication_required"
+    signedOut ||
+    (current.error instanceof NetScopeAPIError &&
+      current.error.code === "authentication_required")
       ? undefined
       : current.data;
   const value = useMemo<AuthContextValue>(
     () => ({
       account,
       loading: current.isPending,
+      sessionExpired,
       login,
       register,
       logout,
@@ -87,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [
       account,
       current.isPending,
+      sessionExpired,
       login,
       register,
       logout,

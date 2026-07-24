@@ -3,7 +3,7 @@ import { NetScopeAPIError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 
 export function AuthPage() {
-  const { login, register } = useAuth();
+  const { login, register, sessionExpired } = useAuth();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -81,6 +81,15 @@ export function AuthPage() {
         <h2 id="auth-title">
           {mode === "login" ? "Return to your workspace" : "Create a workspace"}
         </h2>
+        {sessionExpired && mode === "login" && (
+          <div className="auth-notice" role="alert">
+            <strong>Session expired</strong>
+            <span>
+              The server no longer accepts this session. Sign in again to
+              continue.
+            </span>
+          </div>
+        )}
         <form onSubmit={submit}>
           {mode === "register" && (
             <>
