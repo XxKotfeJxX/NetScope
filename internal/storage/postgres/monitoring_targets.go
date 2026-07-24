@@ -580,6 +580,60 @@ func (r *MonitoringRepository) RecordDispatchFailure(
 		status == monitoring.StatusUnavailable, err
 }
 
+func (r *MonitoringRepository) Overview(
+	ctx context.Context,
+	limit int,
+) (monitoring.Overview, error) {
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	var overview monitoring.Overview
+	if err := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE enabled = TRUE),
+			COUNT(*) FILTER (WHERE enabled = TRUE AND status = 'warning'),
+			COUNT(*) FILTER (WHERE enabled = TRUE AND status = 'unavailable')
+		FROM monitored_targets
+	`).Scan(
+		&overview.ActiveTargets,
+		&overview.WarningTargets,
+		&overview.UnavailableTargets,
+	); err != nil {
+		return monitoring.Overview{}, fmt.Errorf("summarize monitoring targets: %w", err)
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT check_run.id, check_run.target_id, check_run.run_id,
+			check_run.status, check_run.latency_ms, check_run.tls_expires_at,
+			COALESCE(check_run.error_message, ''), check_run.checked_at,
+			check_run.created_at, target.name, target.address
+		FROM monitoring_checks AS check_run
+		JOIN monitored_targets AS target ON target.id = check_run.target_id
+		ORDER BY COALESCE(check_run.checked_at, check_run.created_at) DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return monitoring.Overview{}, fmt.Errorf("list monitoring journal: %w", err)
+	}
+	defer rows.Close()
+	overview.RecentChecks = make([]monitoring.JournalEntry, 0, limit)
+	for rows.Next() {
+		var entry monitoring.JournalEntry
+		if err := rows.Scan(
+			&entry.ID, &entry.TargetID, &entry.RunID, &entry.Status,
+			&entry.LatencyMS, &entry.TLSExpiresAt, &entry.ErrorMessage,
+			&entry.CheckedAt, &entry.CreatedAt, &entry.TargetName,
+			&entry.TargetAddress,
+		); err != nil {
+			return monitoring.Overview{}, fmt.Errorf("scan monitoring journal: %w", err)
+		}
+		overview.RecentChecks = append(overview.RecentChecks, entry)
+	}
+	if err := rows.Err(); err != nil {
+		return monitoring.Overview{}, fmt.Errorf("iterate monitoring journal: %w", err)
+	}
+	return overview, nil
+}
+
 type rowScanner interface {
 	Scan(...any) error
 }

@@ -31,4 +31,5 @@ type Repository interface {
 	ListPendingChecks(context.Context, int) ([]Check, error)
 	CompleteCheck(context.Context, Check) (Target, bool, error)
 	RecordDispatchFailure(context.Context, uuid.UUID, string) (Target, bool, error)
+	Overview(context.Context, int) (Overview, error)
 }
