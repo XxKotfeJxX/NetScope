@@ -8,11 +8,11 @@ COPY internal ./internal
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/netscope ./cmd/netscope
 
 FROM alpine:3.23
-RUN apk add --no-cache ca-certificates \
+RUN apk add --no-cache ca-certificates libcap \
     && addgroup -S netscope \
     && adduser -S -G netscope netscope
 COPY --from=build /out/netscope /usr/local/bin/netscope
+RUN setcap cap_net_raw=+ep /usr/local/bin/netscope
 USER netscope
 EXPOSE 8080
 ENTRYPOINT ["netscope"]
-
