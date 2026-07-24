@@ -2,6 +2,7 @@ package collaboration
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"testing"
 	"time"
@@ -13,6 +14,41 @@ import (
 type repositoryStub struct {
 	members []Member
 	events  []AuditEvent
+	apiKeys []APIKey
+}
+
+func (r *repositoryStub) ListAPIKeys(
+	_ context.Context,
+	_ uuid.UUID,
+) ([]APIKey, error) {
+	return append([]APIKey(nil), r.apiKeys...), nil
+}
+
+func (r *repositoryStub) CreateAPIKey(
+	_ context.Context,
+	key APIKey,
+	event AuditEvent,
+) error {
+	r.apiKeys = append(r.apiKeys, key)
+	r.events = append(r.events, event)
+	return nil
+}
+
+func (r *repositoryStub) RevokeAPIKey(
+	_ context.Context,
+	_ uuid.UUID,
+	keyID uuid.UUID,
+	revokedAt time.Time,
+	event AuditEvent,
+) error {
+	for index := range r.apiKeys {
+		if r.apiKeys[index].ID == keyID && r.apiKeys[index].RevokedAt == nil {
+			r.apiKeys[index].RevokedAt = &revokedAt
+			r.events = append(r.events, event)
+			return nil
+		}
+	}
+	return ErrAPIKeyMissing
 }
 
 func (r *repositoryStub) ListMembers(
@@ -177,6 +213,56 @@ func TestOperatorCannotReadMembershipAdministration(t *testing.T) {
 	ctx := testPrincipal(uuid.New(), identity.RoleOperator)
 	if _, err := service.ListMembers(ctx); !errors.Is(err, identity.ErrForbidden) {
 		t.Fatalf("ListMembers() error = %v", err)
+	}
+}
+
+func TestServiceCreatesAndRevokesHashedAPIKey(t *testing.T) {
+	t.Parallel()
+
+	repository := &repositoryStub{}
+	service := NewService(repository)
+	ctx := testPrincipal(uuid.New(), identity.RoleAdmin)
+	created, err := service.CreateAPIKey(ctx, CreateAPIKeyInput{
+		Name: "CI deploy", Role: identity.RoleOperator,
+	})
+	if err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	if created.Token == "" || created.Prefix == "" ||
+		len(repository.apiKeys) != 1 ||
+		len(repository.apiKeys[0].TokenHash) != sha256.Size {
+		t.Fatalf("CreateAPIKey() = %#v", created)
+	}
+	if string(repository.apiKeys[0].TokenHash) == created.Token {
+		t.Fatal("repository received the plaintext API key")
+	}
+	if err := service.RevokeAPIKey(ctx, created.ID); err != nil {
+		t.Fatalf("RevokeAPIKey() error = %v", err)
+	}
+	if repository.apiKeys[0].RevokedAt == nil || len(repository.events) != 2 {
+		t.Fatalf(
+			"revoked key/events = %#v/%#v",
+			repository.apiKeys[0],
+			repository.events,
+		)
+	}
+}
+
+func TestServiceRejectsPrivilegedOrLongLivedAPIKey(t *testing.T) {
+	t.Parallel()
+
+	service := NewService(&repositoryStub{})
+	ctx := testPrincipal(uuid.New(), identity.RoleOwner)
+	if _, err := service.CreateAPIKey(ctx, CreateAPIKeyInput{
+		Name: "Owner key", Role: identity.RoleOwner,
+	}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("CreateAPIKey(owner) error = %v", err)
+	}
+	expiresAt := time.Now().Add(366 * 24 * time.Hour)
+	if _, err := service.CreateAPIKey(ctx, CreateAPIKeyInput{
+		Name: "Long lived", Role: identity.RoleViewer, ExpiresAt: &expiresAt,
+	}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("CreateAPIKey(long lived) error = %v", err)
 	}
 }
 

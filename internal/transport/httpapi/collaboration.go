@@ -78,6 +78,42 @@ func (h collaborationHandler) listAudit(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h collaborationHandler) listAPIKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := h.service.ListAPIKeys(r.Context())
+	if err != nil {
+		writeAPIError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, keys)
+}
+
+func (h collaborationHandler) createAPIKey(w http.ResponseWriter, r *http.Request) {
+	var input collaboration.CreateAPIKeyInput
+	if !decodeIdentityJSON(w, r, &input) {
+		return
+	}
+	key, err := h.service.CreateAPIKey(r.Context(), input)
+	if err != nil {
+		writeAPIError(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusCreated, key)
+}
+
+func (h collaborationHandler) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	keyID, err := uuid.Parse(chi.URLParam(r, "keyID"))
+	if err != nil {
+		writeAPIError(w, r, collaboration.ErrAPIKeyMissing)
+		return
+	}
+	if err := h.service.RevokeAPIKey(r.Context(), keyID); err != nil {
+		writeAPIError(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func memberID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	value, err := uuid.Parse(chi.URLParam(r, "userID"))
 	if err != nil {

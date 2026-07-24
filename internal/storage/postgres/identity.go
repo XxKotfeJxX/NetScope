@@ -133,6 +133,53 @@ func (r *IdentityRepository) SessionByTokenHash(
 	return session, user, nil
 }
 
+func (r *IdentityRepository) APIKeyByTokenHash(
+	ctx context.Context,
+	tokenHash []byte,
+) (identity.APIKeyCredential, error) {
+	var credential identity.APIKeyCredential
+	err := r.pool.QueryRow(ctx, `
+		SELECT account.id, account.email, account.display_name,
+			account.created_at, account.updated_at,
+			workspace.id, workspace.name, workspace.slug, api_key.role,
+			workspace.created_by, workspace.created_at, workspace.updated_at,
+			api_key.expires_at
+		FROM api_keys AS api_key
+		JOIN users AS account ON account.id = api_key.created_by
+		JOIN workspaces AS workspace ON workspace.id = api_key.workspace_id
+		WHERE api_key.token_hash = $1
+			AND api_key.revoked_at IS NULL
+			AND api_key.expires_at > NOW()
+	`, tokenHash).Scan(
+		&credential.User.ID,
+		&credential.User.Email,
+		&credential.User.DisplayName,
+		&credential.User.CreatedAt,
+		&credential.User.UpdatedAt,
+		&credential.Workspace.ID,
+		&credential.Workspace.Name,
+		&credential.Workspace.Slug,
+		&credential.Workspace.Role,
+		&credential.Workspace.CreatedBy,
+		&credential.Workspace.CreatedAt,
+		&credential.Workspace.UpdatedAt,
+		&credential.ExpiresAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return identity.APIKeyCredential{}, identity.ErrUnauthenticated
+	}
+	if err != nil {
+		return identity.APIKeyCredential{}, fmt.Errorf(
+			"authenticate API key: %w",
+			err,
+		)
+	}
+	_, _ = r.pool.Exec(ctx, `
+		UPDATE api_keys SET last_used_at = NOW() WHERE token_hash = $1
+	`, tokenHash)
+	return credential, nil
+}
+
 func (r *IdentityRepository) DeleteSession(
 	ctx context.Context,
 	tokenHash []byte,

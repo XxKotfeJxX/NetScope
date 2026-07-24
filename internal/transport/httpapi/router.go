@@ -176,6 +176,18 @@ func mountWorkspaceRoutes(
 			"/workspace/audit",
 			collaborationAPI.listAudit,
 		)
+		router.With(guard(identity.RoleAdmin)).Get(
+			"/workspace/api-keys",
+			collaborationAPI.listAPIKeys,
+		)
+		router.With(guard(identity.RoleAdmin)).Post(
+			"/workspace/api-keys",
+			collaborationAPI.createAPIKey,
+		)
+		router.With(guard(identity.RoleAdmin)).Delete(
+			"/workspace/api-keys/{keyID}",
+			collaborationAPI.revokeAPIKey,
+		)
 	}
 }
 

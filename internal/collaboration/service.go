@@ -2,6 +2,9 @@ package collaboration
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net/mail"
 	"strings"
@@ -10,6 +13,9 @@ import (
 	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/google/uuid"
 )
+
+const defaultAPIKeyTTL = 90 * 24 * time.Hour
+const maximumAPIKeyTTL = 365 * 24 * time.Hour
 
 type Service struct {
 	repository Repository
@@ -154,6 +160,98 @@ func (s *Service) ListAudit(
 		Items: items, Page: page, PageSize: pageSize,
 		TotalItems: total, TotalPages: totalPages,
 	}, nil
+}
+
+func (s *Service) ListAPIKeys(ctx context.Context) ([]APIKey, error) {
+	principal, err := principal(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.repository.ListAPIKeys(ctx, principal.Workspace.ID)
+}
+
+func (s *Service) CreateAPIKey(
+	ctx context.Context,
+	input CreateAPIKeyInput,
+) (CreatedAPIKey, error) {
+	principal, err := principal(ctx)
+	if err != nil {
+		return CreatedAPIKey{}, err
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" || len(name) > 100 || strings.IndexFunc(
+		name,
+		func(value rune) bool { return value < 32 || value == 127 },
+	) >= 0 {
+		return CreatedAPIKey{}, fmt.Errorf(
+			"%w: API key name must contain 1 to 100 printable characters",
+			ErrInvalidInput,
+		)
+	}
+	if input.Role != identity.RoleOperator && input.Role != identity.RoleViewer {
+		return CreatedAPIKey{}, fmt.Errorf(
+			"%w: API key role must be operator or viewer",
+			ErrInvalidInput,
+		)
+	}
+	now := time.Now().UTC()
+	expiresAt := now.Add(defaultAPIKeyTTL)
+	if input.ExpiresAt != nil {
+		expiresAt = input.ExpiresAt.UTC()
+	}
+	if !expiresAt.After(now) || expiresAt.After(now.Add(maximumAPIKeyTTL)) {
+		return CreatedAPIKey{}, fmt.Errorf(
+			"%w: API key expiry must be within the next 365 days",
+			ErrInvalidInput,
+		)
+	}
+	randomBytes := make([]byte, 32)
+	if _, err := rand.Read(randomBytes); err != nil {
+		return CreatedAPIKey{}, fmt.Errorf("generate API key: %w", err)
+	}
+	secret := base64.RawURLEncoding.EncodeToString(randomBytes)
+	token := identity.APIKeyTokenPrefix + secret
+	tokenHash := sha256.Sum256([]byte(token))
+	key := APIKey{
+		ID: uuid.New(), WorkspaceID: principal.Workspace.ID, Name: name,
+		Prefix: identity.APIKeyTokenPrefix + secret[:10], Role: input.Role,
+		CreatedBy: principal.User.ID, ExpiresAt: expiresAt,
+		CreatedAt: now, TokenHash: tokenHash[:],
+	}
+	event := AuditEvent{
+		ID: uuid.New(), WorkspaceID: principal.Workspace.ID,
+		ActorUserID: principal.User.ID, Action: "workspace.api_key_created",
+		ResourceType: "api_key", ResourceID: &key.ID,
+		Metadata: map[string]any{
+			"name": key.Name, "prefix": key.Prefix, "role": key.Role,
+		},
+		CreatedAt: now,
+	}
+	if err := s.repository.CreateAPIKey(ctx, key, event); err != nil {
+		return CreatedAPIKey{}, err
+	}
+	return CreatedAPIKey{APIKey: key, Token: token}, nil
+}
+
+func (s *Service) RevokeAPIKey(ctx context.Context, keyID uuid.UUID) error {
+	principal, err := principal(ctx)
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	event := AuditEvent{
+		ID: uuid.New(), WorkspaceID: principal.Workspace.ID,
+		ActorUserID: principal.User.ID, Action: "workspace.api_key_revoked",
+		ResourceType: "api_key", ResourceID: &keyID,
+		Metadata: map[string]any{}, CreatedAt: now,
+	}
+	return s.repository.RevokeAPIKey(
+		ctx,
+		principal.Workspace.ID,
+		keyID,
+		now,
+		event,
+	)
 }
 
 func principal(ctx context.Context) (identity.Principal, error) {

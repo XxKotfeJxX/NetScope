@@ -313,6 +313,23 @@ export interface AuditPage {
   totalPages: number;
 }
 
+export interface WorkspaceAPIKey {
+  id: string;
+  workspaceId: string;
+  name: string;
+  prefix: string;
+  role: "operator" | "viewer";
+  createdBy: string;
+  expiresAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+export interface CreatedWorkspaceAPIKey extends WorkspaceAPIKey {
+  token: string;
+}
+
 export interface APIError {
   error: {
     code: string;

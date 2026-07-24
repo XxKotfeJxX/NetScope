@@ -49,6 +49,12 @@ type Session struct {
 	LastUsedAt time.Time
 }
 
+type APIKeyCredential struct {
+	User      User
+	Workspace Workspace
+	ExpiresAt time.Time
+}
+
 type Account struct {
 	User       User        `json:"user"`
 	Workspaces []Workspace `json:"workspaces"`

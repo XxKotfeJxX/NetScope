@@ -13,6 +13,7 @@ type identityRepositoryStub struct {
 	users      map[string]storedUser
 	sessions   map[string]Session
 	workspaces map[uuid.UUID][]Workspace
+	apiKeys    map[string]APIKeyCredential
 }
 
 type storedUser struct {
@@ -24,7 +25,19 @@ func newIdentityRepositoryStub() *identityRepositoryStub {
 	return &identityRepositoryStub{
 		users: make(map[string]storedUser), sessions: make(map[string]Session),
 		workspaces: make(map[uuid.UUID][]Workspace),
+		apiKeys:    make(map[string]APIKeyCredential),
 	}
+}
+
+func (r *identityRepositoryStub) APIKeyByTokenHash(
+	_ context.Context,
+	tokenHash []byte,
+) (APIKeyCredential, error) {
+	credential, exists := r.apiKeys[string(tokenHash)]
+	if !exists || !credential.ExpiresAt.After(time.Now()) {
+		return APIKeyCredential{}, ErrUnauthenticated
+	}
+	return credential, nil
 }
 
 func (r *identityRepositoryStub) CreateRegistration(
@@ -189,6 +202,38 @@ func TestServiceLoginAndLogout(t *testing.T) {
 		result.Token,
 	); !errors.Is(err, ErrUnauthenticated) {
 		t.Fatalf("Authenticate(after logout) error = %v", err)
+	}
+}
+
+func TestServiceAuthenticatesWorkspaceScopedAPIKey(t *testing.T) {
+	t.Parallel()
+
+	repository := newIdentityRepositoryStub()
+	service := NewService(
+		repository,
+		NewPasswordHasher(testPasswordParams()),
+		time.Hour,
+	)
+	token := APIKeyTokenPrefix + "abcdefghijklmnopqrstuvwxyz0123456789"
+	hash, err := apiKeyTokenHash(token)
+	if err != nil {
+		t.Fatalf("apiKeyTokenHash() error = %v", err)
+	}
+	user := User{ID: uuid.New(), Email: "creator@example.com"}
+	workspace := Workspace{
+		ID: uuid.New(), Name: "Automation", Role: RoleOperator,
+	}
+	repository.apiKeys[string(hash)] = APIKeyCredential{
+		User: user, Workspace: workspace, ExpiresAt: time.Now().Add(time.Hour),
+	}
+	account, err := service.Authenticate(context.Background(), token)
+	if err != nil {
+		t.Fatalf("Authenticate(api key) error = %v", err)
+	}
+	if account.User.ID != user.ID || len(account.Workspaces) != 1 ||
+		account.Workspaces[0].ID != workspace.ID ||
+		account.Workspaces[0].Role != RoleOperator {
+		t.Fatalf("Authenticate(api key) = %#v", account)
 	}
 }
 
