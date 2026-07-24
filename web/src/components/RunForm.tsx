@@ -36,6 +36,12 @@ const schema = z.object({
   tcpPorts: z
     .string()
     .refine(validPorts, "Use up to 10 ports between 1 and 65,535."),
+  httpMethod: z.enum(["GET", "HEAD"]),
+  followRedirects: z.boolean(),
+  maxRedirects: z.number().int().min(0).max(10),
+  ipVersion: z.enum(["auto", "ipv4", "ipv6"]),
+  pingPackets: z.number().int().min(1).max(10),
+  maxHops: z.number().int().min(1).max(64),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -45,6 +51,8 @@ const checkDefinitions: Array<{ type: CheckType; label: string }> = [
   { type: "tcp", label: "TCP" },
   { type: "tls", label: "TLS" },
   { type: "http", label: "HTTP" },
+  { type: "ping", label: "Ping" },
+  { type: "traceroute", label: "Trace" },
 ];
 
 export function RunForm({
@@ -80,9 +88,17 @@ export function RunForm({
       target: initialTarget,
       timeoutMs: capabilities?.runtime.defaultTimeoutMs ?? 5000,
       tcpPorts: "80, 443",
+      httpMethod: "GET",
+      followRedirects: true,
+      maxRedirects: 5,
+      ipVersion: "auto",
+      pingPackets: 4,
+      maxHops: 20,
     },
   });
   const timeoutMs = useWatch({ control, name: "timeoutMs" });
+  const ipVersion = useWatch({ control, name: "ipVersion" });
+  const followRedirects = useWatch({ control, name: "followRedirects" });
 
   function toggleCheck(type: CheckType) {
     setChecks((current) =>
@@ -110,10 +126,12 @@ export function RunForm({
               .split(",")
               .map((port) => Number(port.trim()))
               .filter(Boolean),
-            httpMethod: "GET",
-            followRedirects: true,
-            maxRedirects: 5,
-            ipVersion: "auto",
+            httpMethod: values.httpMethod,
+            followRedirects: values.followRedirects,
+            maxRedirects: values.maxRedirects,
+            ipVersion: values.ipVersion,
+            pingPackets: values.pingPackets,
+            maxHops: values.maxHops,
           },
         });
       })}
@@ -137,11 +155,15 @@ export function RunForm({
 
       <div className="check-strip" aria-label="Diagnostic checks">
         {checkDefinitions.map(({ type, label }) => {
-          const available = capabilities?.checks[type]?.available ?? true;
+          const available = capabilities
+            ? (capabilities.checks[type]?.available ?? false)
+            : type !== "ping" && type !== "traceroute";
           const selected = checks.includes(type);
           return (
             <label
-              className={`check-option ${selected ? "enabled" : ""}`}
+              className={`check-option ${selected ? "enabled" : ""} ${
+                available ? "" : "unavailable"
+              }`}
               key={type}
             >
               <input
@@ -149,6 +171,11 @@ export function RunForm({
                 checked={selected}
                 disabled={!available}
                 onChange={() => toggleCheck(type)}
+                title={
+                  available
+                    ? undefined
+                    : capabilities?.checks[type]?.reason || "Unavailable"
+                }
               />
               <span className="check-symbol" aria-hidden="true">
                 {selected ? "✓" : "○"}
@@ -157,40 +184,93 @@ export function RunForm({
             </label>
           );
         })}
-        <span className="check-option unavailable" aria-disabled="true">
-          <span className="check-symbol">○</span> Ping <small>v0.2</small>
-        </span>
-        <span className="check-option unavailable" aria-disabled="true">
-          <span className="check-symbol">○</span> Trace <small>v0.2</small>
-        </span>
       </div>
       {checkError && <p className="field-error">{checkError}</p>}
 
       <div className="option-summary">
         <span>Timeout {timeoutMs / 1000}s</span>
-        <span>IPv4 / IPv6 auto</span>
-        <span>Follow redirects</span>
+        <span>
+          {ipVersion === "auto" ? "IPv4 / IPv6 auto" : ipVersion.toUpperCase()}
+        </span>
+        <span>{followRedirects ? "Follow redirects" : "Stop on redirect"}</span>
       </div>
 
       <details className="advanced-options">
         <summary>Advanced options</summary>
-        <div className="advanced-grid">
-          <label className="ports-field">
-            <span className="option-label">TCP ports</span>
-            <input {...register("tcpPorts")} placeholder="80, 443" />
-            {errors.tcpPorts && (
-              <span className="field-error">{errors.tcpPorts.message}</span>
-            )}
-          </label>
-          <label className="timeout-field">
-            <span className="option-label">Probe timeout</span>
-            <select {...register("timeoutMs", { valueAsNumber: true })}>
-              <option value={2000}>2 seconds</option>
-              <option value={5000}>5 seconds</option>
-              <option value={10000}>10 seconds</option>
-              <option value={30000}>30 seconds</option>
-            </select>
-          </label>
+        <div className="advanced-sections">
+          <fieldset className="option-group">
+            <legend>Connection</legend>
+            <div className="advanced-grid">
+              <label>
+                <span className="option-label">IP preference</span>
+                <select {...register("ipVersion")}>
+                  <option value="auto">Automatic</option>
+                  <option value="ipv4">IPv4 only</option>
+                  <option value="ipv6">IPv6 only</option>
+                </select>
+              </label>
+              <label>
+                <span className="option-label">Probe timeout</span>
+                <select {...register("timeoutMs", { valueAsNumber: true })}>
+                  <option value={2000}>2 seconds</option>
+                  <option value={5000}>5 seconds</option>
+                  <option value={10000}>10 seconds</option>
+                  <option value={30000}>30 seconds</option>
+                </select>
+              </label>
+              <label className="advanced-span">
+                <span className="option-label">TCP ports</span>
+                <input {...register("tcpPorts")} placeholder="80, 443" />
+                {errors.tcpPorts && (
+                  <span className="field-error">{errors.tcpPorts.message}</span>
+                )}
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset className="option-group">
+            <legend>HTTP</legend>
+            <div className="advanced-grid">
+              <label>
+                <span className="option-label">Method</span>
+                <select {...register("httpMethod")}>
+                  <option value="GET">GET</option>
+                  <option value="HEAD">HEAD</option>
+                </select>
+              </label>
+              <label>
+                <span className="option-label">Maximum redirects</span>
+                <input
+                  type="number"
+                  {...register("maxRedirects", { valueAsNumber: true })}
+                />
+              </label>
+              <label className="toggle-field advanced-span">
+                <input type="checkbox" {...register("followRedirects")} />
+                <span>Follow HTTP redirects</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset className="option-group">
+            <legend>Route probes</legend>
+            <div className="advanced-grid">
+              <label>
+                <span className="option-label">Ping packets</span>
+                <input
+                  type="number"
+                  {...register("pingPackets", { valueAsNumber: true })}
+                />
+              </label>
+              <label>
+                <span className="option-label">Traceroute hops</span>
+                <input
+                  type="number"
+                  {...register("maxHops", { valueAsNumber: true })}
+                />
+              </label>
+            </div>
+          </fieldset>
         </div>
       </details>
     </form>

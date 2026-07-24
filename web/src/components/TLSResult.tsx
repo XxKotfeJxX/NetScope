@@ -14,7 +14,7 @@ export function TLSResult({ result }: { result: CheckResult }) {
   const data = result.data as TLSData;
   return (
     <ResultSection
-      index="04"
+      index="06"
       title="TLS certificate"
       layer="Transport security"
       result={result}

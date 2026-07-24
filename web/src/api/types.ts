@@ -1,4 +1,4 @@
-export type CheckType = "dns" | "tcp" | "http" | "tls";
+export type CheckType = "dns" | "tcp" | "http" | "tls" | "ping" | "traceroute";
 export type RunStatus =
   | "queued"
   | "running"
@@ -16,7 +16,9 @@ export interface RunOptions {
   httpMethod: string;
   followRedirects: boolean;
   maxRedirects: number;
-  ipVersion: string;
+  ipVersion: "auto" | "ipv4" | "ipv6";
+  pingPackets: number;
+  maxHops: number;
 }
 
 export interface CheckResult {
@@ -135,6 +137,35 @@ export interface TLSData {
   selfSigned: boolean;
   expired: boolean;
   warnings: string[];
+}
+
+export interface PingData {
+  address: string;
+  packetsSent: number;
+  packetsReceived: number;
+  packetLossPercent: number;
+  minRttMs: number;
+  averageRttMs: number;
+  maxRttMs: number;
+  samples: Array<{
+    sequence: number;
+    status: "received" | "timeout";
+    address?: string;
+    rttMs?: number;
+  }>;
+}
+
+export interface TracerouteData {
+  address: string;
+  reached: boolean;
+  maxHops: number;
+  hops: Array<{
+    number: number;
+    status: "replied" | "timeout";
+    address?: string;
+    rttMs?: number;
+    destination: boolean;
+  }>;
 }
 
 export interface APIError {

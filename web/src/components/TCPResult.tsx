@@ -6,7 +6,7 @@ export function TCPResult({ result }: { result: CheckResult }) {
   const data = result.data as TCPData;
   return (
     <ResultSection
-      index="03"
+      index="05"
       title="TCP connections"
       layer="Transport layer"
       result={result}
