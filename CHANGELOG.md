@@ -5,6 +5,8 @@ Versioning and uses the Keep a Changelog format.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-24
+
 ### Added
 
 - Target parsing, URL normalization, and local/public network policies.
@@ -17,7 +19,8 @@ Versioning and uses the Keep a Changelog format.
 - SSRF-resistant dialing that pins connections to policy-approved IP addresses.
 - Per-client creation rate limits and an overall run timeout.
 - Run creation, detail, history, cancellation, SSE, capabilities, and JSON export APIs.
-- Dashboard, live run details, typed result cards, history, and runtime settings.
+- Technical Atlas interface with a diagnostic route, live run details, typed
+  results, field-log history, and runtime reference.
 - PostgreSQL integration workflow.
 
 ## [0.0.1] - 2026-07-23
