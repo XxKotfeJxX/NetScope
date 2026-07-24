@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Local tools and editor state
 .tools/
@@ -15,11 +16,14 @@ coverage.out
 *.test
 netscope
 netscope.exe
+demo-seed
+demo-seed.exe
 
 # Frontend
 web/node_modules/
 web/dist/
 web/coverage/
+backups/
 
 # OS files
 .DS_Store

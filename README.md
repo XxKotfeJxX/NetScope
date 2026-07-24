@@ -5,6 +5,8 @@ Technical network diagnostics built with Go and TypeScript.
 [API docs](api/openapi.yaml) · [v0.4.0 release notes](docs/releases/v0.4.0.md) ·
 [Architecture](#architecture) ·
 [API security](docs/operations/api-security.md) ·
+[Production deployment](docs/operations/production-deployment.md) ·
+[Backup and restore](docs/operations/backup-restore.md) ·
 [Demo workspace](docs/operations/demo-workspace.md) · [Roadmap](#roadmap)
 
 NetScope accepts one explicit hostname, URL, or IP address and runs focused

@@ -2,7 +2,13 @@ openapi: 3.1.0
 info:
   title: NetScope API
   version: 0.4.0
-  description: Concurrent network diagnostics and scheduled monitoring API.
+  description: |
+    Stable v1 API for concurrent network diagnostics, scheduled monitoring,
+    workspace collaboration, and published read-only reports.
+
+    Requests are subject to per-client fixed-window limits. Successful and
+    rejected responses expose RateLimit-Limit, RateLimit-Remaining, and
+    RateLimit-Reset. HTTP 429 responses also expose Retry-After.
   license:
     name: MIT
     identifier: MIT
@@ -93,6 +99,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/v1/auth/login:
     post:
       security: []
@@ -120,6 +128,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/v1/auth/logout:
     post:
       security: []
@@ -150,6 +160,8 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/v1/workspaces:
     get:
       tags: [Workspaces]
@@ -542,6 +554,8 @@ paths:
                 $ref: "#/components/schemas/PublicReport"
         "404":
           $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/v1/runs:
     post:
       tags: [Runs]
@@ -578,6 +592,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
     get:
       tags: [Runs]
       operationId: listRuns
@@ -721,6 +737,8 @@ paths:
                 $ref: "#/components/schemas/MonitoredTarget"
         "400":
           $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
   /api/v1/targets/{targetID}:
     parameters:
       - $ref: "#/components/parameters/TargetID"
@@ -1005,6 +1023,27 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Conflict:
       description: The requested change conflicts with workspace state
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    TooManyRequests:
+      description: The active client rate limit was exceeded
+      headers:
+        RateLimit-Limit:
+          schema:
+            type: integer
+        RateLimit-Remaining:
+          schema:
+            type: integer
+        RateLimit-Reset:
+          description: Seconds until the current window resets.
+          schema:
+            type: integer
+        Retry-After:
+          description: Seconds until the request may be retried.
+          schema:
+            type: integer
       content:
         application/json:
           schema:
