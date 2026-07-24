@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FormEvent, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import type { CheckType, MonitoredTarget, TargetInput } from "../api/types";
 import { StatusBadge } from "../components/StatusBadge";
@@ -49,6 +49,10 @@ function relativeTime(value?: string) {
 
 export function TargetsPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [createOpen, setCreateOpen] = useState(
+    () => searchParams.get("new") === "1",
+  );
   const targets = useQuery({
     queryKey: ["targets"],
     queryFn: api.listTargets,
@@ -89,7 +93,18 @@ export function TargetsPage() {
         <code>{targets.data?.totalItems ?? 0} saved targets</code>
       </div>
 
-      <details className="target-create">
+      <details
+        className="target-create"
+        open={createOpen || searchParams.get("new") === "1"}
+        onToggle={(event) => {
+          setCreateOpen(event.currentTarget.open);
+          if (searchParams.has("new")) {
+            const next = new URLSearchParams(searchParams);
+            next.delete("new");
+            setSearchParams(next, { replace: true });
+          }
+        }}
+      >
         <summary>Save a target</summary>
         <form onSubmit={submit}>
           <label>

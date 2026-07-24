@@ -27,6 +27,8 @@ describe("App", () => {
   });
 
   beforeEach(() => {
+    window.localStorage.clear();
+    delete document.documentElement.dataset.theme;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
@@ -147,6 +149,73 @@ describe("App", () => {
     expect(
       screen.getByRole("navigation", { name: /main navigation/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /skip to main content/i }),
+    ).toHaveAttribute("href", "#main-content");
+  });
+
+  it("opens the keyboard command palette", async () => {
+    renderApp();
+    await screen.findByRole("heading", { name: /run a network diagnostic/i });
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+
+    expect(
+      screen.getByRole("dialog", { name: /command palette/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /run diagnostic/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /create schedule/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: /command palette/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("persists the dark theme preference", async () => {
+    renderApp();
+    const toggle = await screen.findByRole("button", {
+      name: /switch to dark theme/i,
+    });
+
+    fireEvent.click(toggle);
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(window.localStorage.getItem("netscope-theme")).toBe("dark");
+    expect(
+      screen.getByRole("button", { name: /switch to light theme/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the schedule form from the command palette", async () => {
+    renderApp();
+    await screen.findByRole("heading", { name: /run a network diagnostic/i });
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+
+    fireEvent.click(screen.getByRole("option", { name: /create schedule/i }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Targets" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Save a target").closest("details"),
+    ).toHaveAttribute("open");
+  });
+
+  it("exposes a compact navigation toggle", async () => {
+    renderApp();
+    const toggle = await screen.findByRole("button", {
+      name: /open navigation/i,
+    });
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveAccessibleName(/close navigation/i);
   });
 
   it("validates an empty target", async () => {

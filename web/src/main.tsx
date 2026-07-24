@@ -4,7 +4,10 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { AuthProvider } from "./auth/AuthProvider";
+import { applyTheme, initialTheme } from "./theme";
 import "./styles.css";
+
+applyTheme(initialTheme());
 
 const queryClient = new QueryClient({
   defaultOptions: {
