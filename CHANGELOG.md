@@ -5,11 +5,23 @@ Versioning and uses the Keep a Changelog format.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-24
+
 ### Added
 
 - IPv4 and IPv6 preference for connection-oriented probes.
 - Capability-detected ICMP ping and traceroute probes with bounded packet and
   hop counts.
+- Structured connection, HTTP, and route-probe options in the diagnostic form.
+- Hop-by-hop traceroute records and compact ping loss and latency metrics.
+- Side-by-side comparison of persisted diagnostic runs.
+- Formula-safe CSV report export alongside JSON.
+- Exact reruns that preserve the original target, checks, and options.
+
+### Changed
+
+- The Linux container grants `CAP_NET_RAW` only to the non-root NetScope
+  executable so ICMP probes work without running the service as root.
 
 ## [0.1.0] - 2026-07-24
 
