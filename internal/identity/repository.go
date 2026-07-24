@@ -28,6 +28,7 @@ type Repository interface {
 	UserByEmail(context.Context, string) (User, string, error)
 	CreateSession(context.Context, Session) error
 	SessionByTokenHash(context.Context, []byte) (Session, User, error)
+	APIKeyByTokenHash(context.Context, []byte) (APIKeyCredential, error)
 	DeleteSession(context.Context, []byte) error
 	ListWorkspaces(context.Context, uuid.UUID) ([]Workspace, error)
 	CreateWorkspace(context.Context, Workspace, Membership) error

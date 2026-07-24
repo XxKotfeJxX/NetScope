@@ -311,6 +311,69 @@ paths:
                 $ref: "#/components/schemas/AuditPage"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /api/v1/workspace/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceAPIKeys
+      summary: List API key metadata for the active workspace
+      responses:
+        "200":
+          description: API keys, including expired and revoked entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/APIKey"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Workspaces]
+      operationId: createWorkspaceAPIKey
+      summary: Create a scoped API key and reveal its secret once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAPIKey"
+      responses:
+        "201":
+          description: API key created; the token cannot be retrieved again
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedAPIKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/workspace/api-keys/{keyID}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: keyID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Workspaces]
+      operationId: revokeWorkspaceAPIKey
+      summary: Permanently revoke an active API key
+      responses:
+        "204":
+          description: API key revoked
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/runs:
     post:
       tags: [Runs]
@@ -693,7 +756,8 @@ components:
     bearerSession:
       type: http
       scheme: bearer
-      bearerFormat: opaque-session-token
+      bearerFormat: ns_session_* or ns_key_*
+      description: Opaque user session or workspace-scoped API key.
   parameters:
     WorkspaceHeader:
       in: header
@@ -890,6 +954,64 @@ components:
           type: integer
         totalPages:
           type: integer
+    APIKey:
+      type: object
+      required:
+        [id, workspaceId, name, prefix, role, createdBy, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        prefix:
+          type: string
+        role:
+          type: string
+          enum: [operator, viewer]
+        createdBy:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CreateAPIKey:
+      type: object
+      required: [name, role]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          enum: [operator, viewer]
+        expiresAt:
+          type: string
+          format: date-time
+          description: Defaults to 90 days and cannot exceed 365 days.
+    CreatedAPIKey:
+      allOf:
+        - $ref: "#/components/schemas/APIKey"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              writeOnly: true
+              description: Plaintext credential returned exactly once.
     RegistrationInput:
       type: object
       required: [email, password, displayName]

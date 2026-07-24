@@ -17,6 +17,7 @@ import (
 )
 
 const sessionTokenPrefix = "ns_session_"
+const APIKeyTokenPrefix = "ns_key_"
 
 var slugSeparators = regexp.MustCompile(`[^a-z0-9]+`)
 
@@ -136,6 +137,20 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (AuthResult, erro
 }
 
 func (s *Service) Authenticate(ctx context.Context, token string) (Account, error) {
+	if strings.HasPrefix(token, APIKeyTokenPrefix) {
+		tokenHash, err := apiKeyTokenHash(token)
+		if err != nil {
+			return Account{}, ErrUnauthenticated
+		}
+		credential, err := s.repository.APIKeyByTokenHash(ctx, tokenHash)
+		if err != nil {
+			return Account{}, err
+		}
+		return Account{
+			User: credential.User, Workspaces: []Workspace{credential.Workspace},
+			ExpiresAt: credential.ExpiresAt,
+		}, nil
+	}
 	tokenHash, err := sessionTokenHash(token)
 	if err != nil {
 		return Account{}, ErrUnauthenticated
@@ -154,6 +169,15 @@ func (s *Service) Authenticate(ctx context.Context, token string) (Account, erro
 	return Account{
 		User: user, Workspaces: workspaces, ExpiresAt: session.ExpiresAt,
 	}, nil
+}
+
+func apiKeyTokenHash(token string) ([]byte, error) {
+	if !strings.HasPrefix(token, APIKeyTokenPrefix) ||
+		len(token) < len(APIKeyTokenPrefix)+32 {
+		return nil, ErrUnauthenticated
+	}
+	hash := sha256.Sum256([]byte(token))
+	return hash[:], nil
 }
 
 func (s *Service) Logout(ctx context.Context, token string) error {

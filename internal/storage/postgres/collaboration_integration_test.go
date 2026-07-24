@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"os"
 	"testing"
@@ -131,6 +132,48 @@ func TestCollaborationRepositoryLifecycle(t *testing.T) {
 	)
 	if err != nil || total != 3 || len(events) != 3 {
 		t.Fatalf("ListAudit() = %#v, %d, %v", events, total, err)
+	}
+	token := identity.APIKeyTokenPrefix + "integration-secret-abcdefghijklmnopqrstuvwxyz"
+	tokenHash := sha256.Sum256([]byte(token))
+	key := collaboration.APIKey{
+		ID: uuid.New(), WorkspaceID: owner.workspace.ID, Name: "Integration",
+		Prefix: "ns_key_integratio", TokenHash: tokenHash[:],
+		Role: identity.RoleOperator, CreatedBy: owner.user.ID,
+		ExpiresAt: now.Add(time.Hour), CreatedAt: now,
+	}
+	keyEvent := collaboration.AuditEvent{
+		ID: uuid.New(), WorkspaceID: owner.workspace.ID,
+		ActorUserID: owner.user.ID, Action: "workspace.api_key_created",
+		ResourceType: "api_key", ResourceID: &key.ID,
+		Metadata: map[string]any{"name": key.Name}, CreatedAt: now,
+	}
+	if err := repository.CreateAPIKey(ctx, key, keyEvent); err != nil {
+		t.Fatalf("CreateAPIKey() error = %v", err)
+	}
+	credential, err := NewIdentityRepository(pool).APIKeyByTokenHash(
+		ctx,
+		tokenHash[:],
+	)
+	if err != nil || credential.Workspace.ID != owner.workspace.ID ||
+		credential.Workspace.Role != identity.RoleOperator {
+		t.Fatalf("APIKeyByTokenHash() = %#v, %v", credential, err)
+	}
+	keyEvent.ID = uuid.New()
+	keyEvent.Action = "workspace.api_key_revoked"
+	if err := repository.RevokeAPIKey(
+		ctx,
+		owner.workspace.ID,
+		key.ID,
+		now.Add(time.Minute),
+		keyEvent,
+	); err != nil {
+		t.Fatalf("RevokeAPIKey() error = %v", err)
+	}
+	if _, err := NewIdentityRepository(pool).APIKeyByTokenHash(
+		ctx,
+		tokenHash[:],
+	); !errors.Is(err, identity.ErrUnauthenticated) {
+		t.Fatalf("APIKeyByTokenHash(revoked) error = %v", err)
 	}
 }
 

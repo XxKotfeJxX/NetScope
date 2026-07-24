@@ -124,6 +124,10 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusConflict
 		code = "last_workspace_owner"
 		message = "Assign another owner before changing or removing the last owner."
+	case errors.Is(err, collaboration.ErrAPIKeyMissing):
+		status = http.StatusNotFound
+		code = "api_key_not_found"
+		message = "The API key was not found or is already revoked."
 	}
 
 	writeJSON(w, status, errorEnvelope{Error: apiError{

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/identity"
@@ -243,6 +244,114 @@ func (r *CollaborationRepository) ListAudit(
 		return nil, 0, fmt.Errorf("iterate audit events: %w", err)
 	}
 	return events, total, nil
+}
+
+func (r *CollaborationRepository) ListAPIKeys(
+	ctx context.Context,
+	workspaceID uuid.UUID,
+) ([]collaboration.APIKey, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, workspace_id, name, prefix, role, created_by, expires_at,
+			last_used_at, revoked_at, created_at
+		FROM api_keys
+		WHERE workspace_id = $1
+		ORDER BY created_at DESC, id DESC
+	`, workspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("list workspace API keys: %w", err)
+	}
+	defer rows.Close()
+	keys := make([]collaboration.APIKey, 0)
+	for rows.Next() {
+		var key collaboration.APIKey
+		if err := rows.Scan(
+			&key.ID,
+			&key.WorkspaceID,
+			&key.Name,
+			&key.Prefix,
+			&key.Role,
+			&key.CreatedBy,
+			&key.ExpiresAt,
+			&key.LastUsedAt,
+			&key.RevokedAt,
+			&key.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan workspace API key: %w", err)
+		}
+		keys = append(keys, key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate workspace API keys: %w", err)
+	}
+	return keys, nil
+}
+
+func (r *CollaborationRepository) CreateAPIKey(
+	ctx context.Context,
+	key collaboration.APIKey,
+	event collaboration.AuditEvent,
+) error {
+	transaction, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin API key creation: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(ctx) }()
+	if _, err := transaction.Exec(ctx, `
+		INSERT INTO api_keys (
+			id, workspace_id, name, prefix, token_hash, role, created_by,
+			expires_at, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+	`, key.ID, key.WorkspaceID, key.Name, key.Prefix, key.TokenHash,
+		key.Role, key.CreatedBy, key.ExpiresAt, key.CreatedAt); err != nil {
+		return fmt.Errorf("create workspace API key: %w", err)
+	}
+	if err := insertAuditEvent(ctx, transaction, event); err != nil {
+		return err
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return fmt.Errorf("commit API key creation: %w", err)
+	}
+	return nil
+}
+
+func (r *CollaborationRepository) RevokeAPIKey(
+	ctx context.Context,
+	workspaceID uuid.UUID,
+	keyID uuid.UUID,
+	revokedAt time.Time,
+	event collaboration.AuditEvent,
+) error {
+	transaction, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin API key revocation: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(ctx) }()
+	var name string
+	var prefix string
+	if err := transaction.QueryRow(ctx, `
+		SELECT name, prefix
+		FROM api_keys
+		WHERE id = $1 AND workspace_id = $2 AND revoked_at IS NULL
+		FOR UPDATE
+	`, keyID, workspaceID).Scan(&name, &prefix); errors.Is(err, pgx.ErrNoRows) {
+		return collaboration.ErrAPIKeyMissing
+	} else if err != nil {
+		return fmt.Errorf("get workspace API key for revocation: %w", err)
+	}
+	if _, err := transaction.Exec(ctx, `
+		UPDATE api_keys SET revoked_at = $3
+		WHERE id = $1 AND workspace_id = $2
+	`, keyID, workspaceID, revokedAt); err != nil {
+		return fmt.Errorf("revoke workspace API key: %w", err)
+	}
+	event.Metadata = map[string]any{"name": name, "prefix": prefix}
+	if err := insertAuditEvent(ctx, transaction, event); err != nil {
+		return err
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return fmt.Errorf("commit API key revocation: %w", err)
+	}
+	return nil
 }
 
 type postgresQueryExecutor interface {
