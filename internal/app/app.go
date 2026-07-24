@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/XxKotfeJxX/netscope/internal/network"
 	dnsprobe "github.com/XxKotfeJxX/netscope/internal/probe/dns"
@@ -97,6 +98,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 	)
 	monitoringRepository := postgres.NewMonitoringRepository(pool)
 	monitoringService := monitoring.NewService(monitoringRepository, service)
+	identityRepository := postgres.NewIdentityRepository(pool)
+	identityService := identity.NewService(
+		identityRepository,
+		identity.NewPasswordHasher(identity.DefaultPasswordParams()),
+		cfg.SessionTTL,
+	)
 	webhookSender := monitoring.NewWebhookSender(
 		secureDialer,
 		cfg.NotificationTimeout,
@@ -126,13 +133,15 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 	scheduler.Start()
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		Logger:     logger,
-		Pool:       pool,
-		Version:    cfg.Version,
-		WebOrigin:  cfg.WebOrigin,
-		Runs:       service,
-		Events:     events,
-		Monitoring: monitoringService,
+		Logger:              logger,
+		Pool:                pool,
+		Version:             cfg.Version,
+		WebOrigin:           cfg.WebOrigin,
+		Runs:                service,
+		Events:              events,
+		Monitoring:          monitoringService,
+		Identity:            identityService,
+		SessionCookieSecure: cfg.SessionCookieSecure,
 		Checks: map[string]httpapi.Capability{
 			"dns": {Available: true}, "tcp": {Available: true},
 			"http": {Available: true}, "tls": {Available: true},
