@@ -10,16 +10,18 @@ import (
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
 type apiHandler struct {
-	runs    *diagnostics.Service
-	events  diagnostics.EventPublisher
-	version string
-	runtime RuntimeInfo
-	checks  map[string]Capability
+	runs       *diagnostics.Service
+	events     diagnostics.EventPublisher
+	version    string
+	runtime    RuntimeInfo
+	checks     map[string]Capability
+	monitoring *monitoring.Service
 }
 
 type createRunRequest struct {

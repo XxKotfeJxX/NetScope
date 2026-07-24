@@ -96,6 +96,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		cfg.MaxProbeTimeout,
 	)
 	monitoringRepository := postgres.NewMonitoringRepository(pool)
+	monitoringService := monitoring.NewService(monitoringRepository, service)
 	scheduler := monitoring.NewScheduler(
 		monitoringRepository,
 		service,
@@ -106,12 +107,13 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 	scheduler.Start()
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		Logger:    logger,
-		Pool:      pool,
-		Version:   cfg.Version,
-		WebOrigin: cfg.WebOrigin,
-		Runs:      service,
-		Events:    events,
+		Logger:     logger,
+		Pool:       pool,
+		Version:    cfg.Version,
+		WebOrigin:  cfg.WebOrigin,
+		Runs:       service,
+		Events:     events,
+		Monitoring: monitoringService,
 		Checks: map[string]httpapi.Capability{
 			"dns": {Available: true}, "tcp": {Available: true},
 			"http": {Available: true}, "tls": {Available: true},
