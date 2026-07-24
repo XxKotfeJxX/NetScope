@@ -175,12 +175,12 @@ paths:
         name: format
         schema:
           type: string
-          const: json
+          enum: [json, csv]
           default: json
     get:
       tags: [Runs]
       operationId: exportRun
-      summary: Export a run as JSON
+      summary: Export a run as JSON or CSV
       responses:
         "200":
           description: JSON export
@@ -192,6 +192,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiagnosticRun"
+            text/csv:
+              schema:
+                type: string
         "404":
           $ref: "#/components/responses/NotFound"
 components:

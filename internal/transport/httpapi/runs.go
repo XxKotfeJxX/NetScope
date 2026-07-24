@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -109,7 +111,8 @@ func (h apiHandler) cancelRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h apiHandler) exportRun(w http.ResponseWriter, r *http.Request) {
-	if format := r.URL.Query().Get("format"); format != "" && format != "json" {
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format != "" && format != "json" && format != "csv" {
 		writeAPIError(w, r, errUnsupportedFormat)
 		return
 	}
@@ -123,8 +126,97 @@ func (h apiHandler) exportRun(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, r, err)
 		return
 	}
-	w.Header().Set("Content-Disposition", `attachment; filename="netscope-`+id.String()+`.json"`)
+	if format == "csv" {
+		payload, err := runCSV(run)
+		if err != nil {
+			writeAPIError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set(
+			"Content-Disposition",
+			`attachment; filename="netscope-`+id.String()+`.csv"`,
+		)
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(payload)
+		return
+	}
+	w.Header().Set(
+		"Content-Disposition",
+		`attachment; filename="netscope-`+id.String()+`.json"`,
+	)
 	writeJSON(w, http.StatusOK, run)
+}
+
+func runCSV(run diagnostics.DiagnosticRun) ([]byte, error) {
+	var buffer bytes.Buffer
+	writer := csv.NewWriter(&buffer)
+	header := []string{
+		"run_id", "target", "normalized_host", "normalized_url", "run_status",
+		"requested_checks", "options_json", "created_at", "started_at", "completed_at",
+		"check_type", "check_status", "duration_ms", "summary", "error_code",
+		"error_message", "data_json",
+	}
+	if err := writer.Write(header); err != nil {
+		return nil, err
+	}
+
+	options, err := json.Marshal(run.Options)
+	if err != nil {
+		return nil, err
+	}
+	checks := make([]string, len(run.RequestedChecks))
+	for index, check := range run.RequestedChecks {
+		checks[index] = string(check)
+	}
+	base := []string{
+		run.ID.String(), run.TargetInput, run.NormalizedHost, run.NormalizedURL,
+		string(run.Status), strings.Join(checks, "|"), string(options),
+		run.CreatedAt.Format(time.RFC3339Nano), formatOptionalTime(run.StartedAt),
+		formatOptionalTime(run.CompletedAt),
+	}
+
+	if len(run.Results) == 0 {
+		if err := writer.Write(safeCSVRow(append(base, make([]string, 7)...))); err != nil {
+			return nil, err
+		}
+	} else {
+		for _, result := range run.Results {
+			row := append(append([]string{}, base...),
+				string(result.Type), string(result.Status),
+				strconv.FormatInt(result.DurationMS, 10), result.Summary,
+				result.ErrorCode, result.ErrorMessage, string(result.Data),
+			)
+			if err := writer.Write(safeCSVRow(row)); err != nil {
+				return nil, err
+			}
+		}
+	}
+	writer.Flush()
+	if err := writer.Error(); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
+}
+
+func formatOptionalTime(value *time.Time) string {
+	if value == nil {
+		return ""
+	}
+	return value.Format(time.RFC3339Nano)
+}
+
+func safeCSVRow(row []string) []string {
+	safe := make([]string, len(row))
+	for index, value := range row {
+		if strings.HasPrefix(value, "=") || strings.HasPrefix(value, "+") ||
+			strings.HasPrefix(value, "-") || strings.HasPrefix(value, "@") ||
+			strings.HasPrefix(value, "\t") || strings.HasPrefix(value, "\r") {
+			value = "'" + value
+		}
+		safe[index] = value
+	}
+	return safe
 }
 
 func pathUUID(r *http.Request) (uuid.UUID, error) {
