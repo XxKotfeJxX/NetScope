@@ -51,7 +51,7 @@ type TargetInput struct {
 type Check struct {
 	ID           uuid.UUID    `json:"id"`
 	TargetID     uuid.UUID    `json:"targetId"`
-	RunID        uuid.UUID    `json:"runId"`
+	RunID        *uuid.UUID   `json:"runId,omitempty"`
 	Status       TargetStatus `json:"status"`
 	LatencyMS    *int64       `json:"latencyMs,omitempty"`
 	TLSExpiresAt *time.Time   `json:"tlsExpiresAt,omitempty"`

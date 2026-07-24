@@ -102,6 +102,72 @@ func TestMonitoringRepositoryLifecycle(t *testing.T) {
 	if err != nil || len(channels) != 1 {
 		t.Fatalf("ListNotificationChannels() = %#v, %v", channels, err)
 	}
+	if err := repository.SetTargetEnabled(ctx, target.ID, true); err != nil {
+		t.Fatalf("resume target: %v", err)
+	}
+	due, err := repository.ClaimDueTargets(ctx, 10)
+	if err != nil || len(due) != 0 {
+		t.Fatalf("maintenance ClaimDueTargets() = %#v, %v", due, err)
+	}
+	stored, err = repository.GetTarget(ctx, target.ID)
+	if err != nil || stored.Status != monitoring.StatusMaintenance {
+		t.Fatalf("maintenance target = %+v, %v", stored, err)
+	}
+	if err := repository.DeleteMaintenanceWindow(ctx, target.ID, window.ID); err != nil {
+		t.Fatalf("DeleteMaintenanceWindow() error = %v", err)
+	}
+	if err := repository.SetTargetEnabled(ctx, target.ID, true); err != nil {
+		t.Fatalf("reschedule target: %v", err)
+	}
+	due, err = repository.ClaimDueTargets(ctx, 10)
+	if err != nil || len(due) != 1 {
+		t.Fatalf("ClaimDueTargets() = %#v, %v", due, err)
+	}
+	runID := uuid.New()
+	runRepository := NewRunRepository(pool)
+	if err := runRepository.Create(ctx, diagnostics.DiagnosticRun{
+		ID: runID, TargetInput: target.Address, NormalizedHost: target.Address,
+		Status: diagnostics.RunQueued, RequestedChecks: target.Checks,
+		Options: target.Options, CreatedAt: now,
+	}); err != nil {
+		t.Fatalf("create scheduled run: %v", err)
+	}
+	if err := repository.CreateScheduledCheck(ctx, target.ID, runID); err != nil {
+		t.Fatalf("CreateScheduledCheck() error = %v", err)
+	}
+	pending, err := repository.ListPendingChecks(ctx, 10)
+	if err != nil || len(pending) != 1 || pending[0].RunID == nil {
+		t.Fatalf("ListPendingChecks() = %#v, %v", pending, err)
+	}
+	latency := int64(125)
+	checkedAt := now.Add(time.Second)
+	pending[0].Status = monitoring.StatusOperational
+	pending[0].LatencyMS = &latency
+	pending[0].CheckedAt = &checkedAt
+	updated, notify, err := repository.CompleteCheck(ctx, pending[0])
+	if err != nil || notify || updated.Status != monitoring.StatusOperational {
+		t.Fatalf("CompleteCheck() = %+v, %t, %v", updated, notify, err)
+	}
+	if updated.LastLatencyMS == nil || *updated.LastLatencyMS != latency {
+		t.Fatalf("last latency = %v", updated.LastLatencyMS)
+	}
+	for attempt := 1; attempt <= target.FailureThreshold; attempt++ {
+		updated, notify, err = repository.RecordDispatchFailure(
+			ctx,
+			target.ID,
+			"queue unavailable",
+		)
+		if err != nil {
+			t.Fatalf("RecordDispatchFailure(%d) error = %v", attempt, err)
+		}
+		if notify != (attempt == target.FailureThreshold) {
+			t.Fatalf("notification at attempt %d = %t", attempt, notify)
+		}
+	}
+	if updated.Status != monitoring.StatusUnavailable ||
+		updated.ConsecutiveFailures != target.FailureThreshold {
+		t.Fatalf("failed target = %+v", updated)
+	}
 	if err := repository.DeleteTarget(ctx, target.ID); err != nil {
 		t.Fatalf("DeleteTarget() error = %v", err)
 	}
