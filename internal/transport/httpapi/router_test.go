@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/target"
+	"github.com/google/uuid"
 )
 
 func TestHealthz(t *testing.T) {
@@ -54,6 +56,32 @@ func TestAPIErrorDoesNotExposeInternalDetails(t *testing.T) {
 	}
 	if strings.Contains(body, target.ErrAddressBlocked.Error()) {
 		t.Fatalf("response exposed internal error: %q", body)
+	}
+}
+
+func TestWorkspaceRoleGuardRejectsViewerWrites(t *testing.T) {
+	t.Parallel()
+
+	guard := identityHandler{}.requireRole(identity.RoleOperator)
+	handler := guard(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		_ *http.Request,
+	) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/targets", nil)
+	request = request.WithContext(identity.WithPrincipal(
+		request.Context(),
+		identity.Principal{
+			Workspace: identity.Workspace{
+				ID: uuid.New(), Role: identity.RoleViewer,
+			},
+		},
+	))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
 	}
 }
 

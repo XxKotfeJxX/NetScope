@@ -41,6 +41,27 @@ func TestIdentityRepositoryLifecycle(t *testing.T) {
 
 	repository := NewIdentityRepository(pool)
 	now := time.Now().UTC().Truncate(time.Microsecond)
+	legacyRunID := uuid.New()
+	legacyTargetID := uuid.New()
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO diagnostic_runs (
+			id, target_input, normalized_host, status, requested_checks,
+			options, created_at
+		) VALUES ($1, 'example.com', 'example.com', 'completed',
+			ARRAY['dns'], '{}', $2)
+	`, legacyRunID, now); err != nil {
+		t.Fatalf("create legacy diagnostic run: %v", err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO monitored_targets (
+			id, name, address, tags, requested_checks, options,
+			interval_seconds, enabled, failure_threshold, status,
+			next_check_at, created_at, updated_at
+		) VALUES ($1, 'Legacy', 'example.com', ARRAY['legacy'], ARRAY['dns'],
+			'{}', 300, TRUE, 3, 'pending', $2, $2, $2)
+	`, legacyTargetID, now); err != nil {
+		t.Fatalf("create legacy monitored target: %v", err)
+	}
 	user := identity.User{
 		ID: uuid.New(), Email: "owner@example.com", DisplayName: "Owner",
 		CreatedAt: now, UpdatedAt: now,
@@ -67,6 +88,29 @@ func TestIdentityRepositoryLifecycle(t *testing.T) {
 		session,
 	); err != nil {
 		t.Fatalf("CreateRegistration() error = %v", err)
+	}
+	var claimedRunWorkspace uuid.UUID
+	var claimedTargetWorkspace uuid.UUID
+	if err := pool.QueryRow(ctx,
+		`SELECT workspace_id FROM diagnostic_runs WHERE id = $1`,
+		legacyRunID,
+	).Scan(&claimedRunWorkspace); err != nil {
+		t.Fatalf("load claimed run: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT workspace_id FROM monitored_targets WHERE id = $1`,
+		legacyTargetID,
+	).Scan(&claimedTargetWorkspace); err != nil {
+		t.Fatalf("load claimed target: %v", err)
+	}
+	if claimedRunWorkspace != workspace.ID ||
+		claimedTargetWorkspace != workspace.ID {
+		t.Fatalf(
+			"legacy workspaces = %s, %s, want %s",
+			claimedRunWorkspace,
+			claimedTargetWorkspace,
+			workspace.ID,
+		)
 	}
 	stored, hash, err := repository.UserByEmail(ctx, "OWNER@example.com")
 	if err != nil || stored.ID != user.ID || hash != "password-hash" {

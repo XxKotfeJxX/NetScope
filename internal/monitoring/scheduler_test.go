@@ -69,6 +69,16 @@ func (r schedulerRuns) Create(
 	return r.created, r.err
 }
 
+func (r schedulerRuns) CreateInWorkspace(
+	context.Context,
+	uuid.UUID,
+	string,
+	[]diagnostics.CheckType,
+	diagnostics.RunOptions,
+) (diagnostics.DiagnosticRun, error) {
+	return r.created, r.err
+}
+
 func (schedulerRuns) Get(
 	context.Context,
 	uuid.UUID,
@@ -81,7 +91,7 @@ func TestSchedulerDispatchLinksDiagnosticRun(t *testing.T) {
 
 	runID := uuid.New()
 	repository := &schedulerRepository{due: []Target{{
-		ID: uuid.New(), Address: "example.com",
+		ID: uuid.New(), WorkspaceID: uuid.New(), Address: "example.com",
 		Checks: []diagnostics.CheckType{diagnostics.CheckDNS},
 	}}}
 	scheduler := NewScheduler(

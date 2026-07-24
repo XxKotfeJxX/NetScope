@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/google/uuid"
 )
@@ -44,6 +45,39 @@ func NewService(
 
 func (s *Service) Create(
 	ctx context.Context,
+	input string,
+	checks []CheckType,
+	options RunOptions,
+) (DiagnosticRun, error) {
+	workspaceID, err := identity.WorkspaceID(ctx)
+	if err != nil {
+		return DiagnosticRun{}, err
+	}
+	return s.create(ctx, workspaceID, input, checks, options)
+}
+
+func (s *Service) CreateInWorkspace(
+	ctx context.Context,
+	workspaceID uuid.UUID,
+	input string,
+	checks []CheckType,
+	options RunOptions,
+) (DiagnosticRun, error) {
+	if workspaceID == uuid.Nil {
+		return DiagnosticRun{}, identity.ErrWorkspaceNotFound
+	}
+	return s.create(
+		identity.WithSystemAccess(ctx),
+		workspaceID,
+		input,
+		checks,
+		options,
+	)
+}
+
+func (s *Service) create(
+	ctx context.Context,
+	workspaceID uuid.UUID,
 	input string,
 	checks []CheckType,
 	options RunOptions,
@@ -125,6 +159,7 @@ func (s *Service) Create(
 
 	run := DiagnosticRun{
 		ID:              uuid.New(),
+		WorkspaceID:     workspaceID,
 		TargetInput:     parsed.Input,
 		NormalizedHost:  parsed.Host,
 		NormalizedURL:   parsed.NormalizedURL,
@@ -179,6 +214,9 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (DiagnosticRun, error) 
 	if err != nil {
 		return DiagnosticRun{}, err
 	}
+	if err := identity.AuthorizeWorkspace(ctx, run.WorkspaceID); err != nil {
+		return DiagnosticRun{}, err
+	}
 	parsed, parseErr := target.Parse(run.TargetInput)
 	if parseErr == nil {
 		run.Target = parsed
@@ -187,10 +225,22 @@ func (s *Service) Get(ctx context.Context, id uuid.UUID) (DiagnosticRun, error) 
 }
 
 func (s *Service) List(ctx context.Context, filter ListFilter) (Page, error) {
+	workspaceID, err := identity.WorkspaceID(ctx)
+	if err != nil {
+		return Page{}, err
+	}
+	filter.WorkspaceID = workspaceID
 	return s.repository.List(ctx, filter)
 }
 
 func (s *Service) Cancel(ctx context.Context, id uuid.UUID) error {
+	run, err := s.repository.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := identity.AuthorizeWorkspace(ctx, run.WorkspaceID); err != nil {
+		return err
+	}
 	return s.manager.Cancel(ctx, id)
 }
 

@@ -19,10 +19,13 @@ tags:
     description: Account registration, sessions, and current-user context.
   - name: Workspaces
     description: Collaborative workspace lifecycle and membership context.
-security: []
+security:
+  - sessionCookie: []
+  - bearerSession: []
 paths:
   /healthz:
     get:
+      security: []
       tags: [System]
       operationId: getHealth
       summary: Check whether the API process is alive
@@ -35,6 +38,7 @@ paths:
                 $ref: "#/components/schemas/Health"
   /readyz:
     get:
+      security: []
       tags: [System]
       operationId: getReadiness
       summary: Check PostgreSQL readiness
@@ -45,6 +49,7 @@ paths:
           description: PostgreSQL is unavailable
   /api/v1/capabilities:
     get:
+      security: []
       tags: [System]
       operationId: getCapabilities
       summary: Get available diagnostic checks and runtime limits
@@ -57,6 +62,7 @@ paths:
                 $ref: "#/components/schemas/Capabilities"
   /api/v1/auth/register:
     post:
+      security: []
       tags: [Identity]
       operationId: registerAccount
       summary: Register an account and its first workspace
@@ -87,6 +93,7 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
   /api/v1/auth/login:
     post:
+      security: []
       tags: [Identity]
       operationId: loginAccount
       summary: Create a user session
@@ -113,6 +120,7 @@ paths:
           $ref: "#/components/responses/Unauthorized"
   /api/v1/auth/logout:
     post:
+      security: []
       tags: [Identity]
       operationId: logoutAccount
       summary: Revoke the current session
@@ -1161,6 +1169,7 @@ components:
       required:
         [
           id,
+          workspaceId,
           target,
           normalizedHost,
           status,
@@ -1171,6 +1180,9 @@ components:
         ]
       properties:
         id:
+          type: string
+          format: uuid
+        workspaceId:
           type: string
           format: uuid
         target:
@@ -1267,6 +1279,7 @@ components:
           required:
             [
               id,
+              workspaceId,
               enabled,
               consecutiveFailures,
               status,
@@ -1276,6 +1289,9 @@ components:
             ]
           properties:
             id:
+              type: string
+              format: uuid
+            workspaceId:
               type: string
               format: uuid
             enabled:

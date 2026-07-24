@@ -36,15 +36,18 @@ func TestRunRepositoryLifecycle(t *testing.T) {
 	defer pool.Close()
 	if _, err := pool.Exec(ctx, `
 		TRUNCATE notification_channels, maintenance_windows, monitoring_checks,
-			monitored_targets, check_results, diagnostic_runs
+			monitored_targets, check_results, diagnostic_runs,
+			user_sessions, workspace_members, workspaces, users CASCADE
 	`); err != nil {
 		t.Fatalf("truncate test tables: %v", err)
 	}
+	workspaceID := createIntegrationWorkspace(t, ctx, pool)
 
 	repository := NewRunRepository(pool)
 	runID := uuid.New()
 	run := diagnostics.DiagnosticRun{
-		ID: runID, TargetInput: "example.com", NormalizedHost: "example.com",
+		ID: runID, WorkspaceID: workspaceID,
+		TargetInput: "example.com", NormalizedHost: "example.com",
 		Status: diagnostics.RunQueued, RequestedChecks: []diagnostics.CheckType{diagnostics.CheckDNS},
 		Options:   diagnostics.RunOptions{TimeoutMS: 5000, IPVersion: "auto"},
 		CreatedAt: time.Now().UTC().Truncate(time.Microsecond),
@@ -77,7 +80,9 @@ func TestRunRepositoryLifecycle(t *testing.T) {
 		t.Fatalf("results = %#v, want one DNS result", stored.Results)
 	}
 
-	page, err := repository.List(ctx, diagnostics.ListFilter{Page: 1, PageSize: 20})
+	page, err := repository.List(ctx, diagnostics.ListFilter{
+		WorkspaceID: workspaceID, Page: 1, PageSize: 20,
+	})
 	if err != nil {
 		t.Fatalf("List() error = %v", err)
 	}
