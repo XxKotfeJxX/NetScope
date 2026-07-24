@@ -1,10 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
+import { Menu, Moon, Search, Sun, X } from "lucide-react";
+import { useState } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { initialTheme, saveTheme, type Theme } from "../theme";
+import { CommandPalette } from "./CommandPalette";
 
 export function Layout() {
   const { account, logout, selectWorkspace } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [theme, setTheme] = useState<Theme>(initialTheme);
   const capabilities = useQuery({
     queryKey: ["capabilities"],
     queryFn: api.capabilities,
@@ -13,8 +20,17 @@ export function Layout() {
 
   if (!account) return null;
 
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setTheme(nextTheme);
+    saveTheme(nextTheme);
+  };
+
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <header className="topbar">
         <div className="workspace-identity">
           <Link className="brand" to="/">
@@ -34,7 +50,12 @@ export function Layout() {
           </select>
         </div>
 
-        <nav aria-label="Main navigation">
+        <nav
+          id="main-navigation"
+          className={menuOpen ? "is-open" : ""}
+          aria-label="Main navigation"
+          onClick={() => setMenuOpen(false)}
+        >
           <NavLink to="/" end>
             Diagnose
           </NavLink>
@@ -45,6 +66,29 @@ export function Layout() {
         </nav>
 
         <div className="account-tools">
+          <button
+            className="command-trigger"
+            type="button"
+            aria-label="Open command palette"
+            onClick={() => setPaletteOpen(true)}
+          >
+            <Search aria-hidden="true" size={15} strokeWidth={1.8} />
+            <span>Search</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+          <button
+            className="icon-button"
+            type="button"
+            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+            title={`Switch to ${theme === "light" ? "dark" : "light"} theme`}
+            onClick={toggleTheme}
+          >
+            {theme === "light" ? (
+              <Moon aria-hidden="true" size={16} strokeWidth={1.7} />
+            ) : (
+              <Sun aria-hidden="true" size={16} strokeWidth={1.7} />
+            )}
+          </button>
           <Link className="api-state" to="/settings">
             <span
               className={capabilities.isSuccess ? "is-online" : "is-checking"}
@@ -67,9 +111,26 @@ export function Layout() {
           >
             {initials(account.user.displayName)}
           </button>
+          <button
+            className="mobile-menu-button"
+            type="button"
+            aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={menuOpen}
+            aria-controls="main-navigation"
+            onClick={() => setMenuOpen((current) => !current)}
+          >
+            {menuOpen ? (
+              <X aria-hidden="true" size={18} />
+            ) : (
+              <Menu aria-hidden="true" size={18} />
+            )}
+          </button>
         </div>
       </header>
-      <Outlet />
+      <div id="main-content" tabIndex={-1}>
+        <Outlet />
+      </div>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>
   );
 }
