@@ -126,7 +126,7 @@ export function DocsPage() {
             </pre>
             <a
               className="docs-action"
-              href={`${repositoryURL}/blob/dev/api/openapi.yaml`}
+              href={`${repositoryURL}/blob/main/api/openapi.yaml`}
               target="_blank"
               rel="noreferrer"
             >
@@ -202,7 +202,7 @@ export function DocsPage() {
             </ul>
             <a
               className="docs-action"
-              href={`${repositoryURL}/tree/dev/docs`}
+              href={`${repositoryURL}/tree/main/docs`}
               target="_blank"
               rel="noreferrer"
             >

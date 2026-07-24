@@ -2,7 +2,7 @@
 
 Technical network diagnostics built with Go and TypeScript.
 
-[API docs](api/openapi.yaml) · [v0.4.0 release notes](docs/releases/v0.4.0.md) ·
+[API docs](api/openapi.yaml) · [v1.0.0 release notes](docs/releases/v1.0.0.md) ·
 [Architecture](#architecture) ·
 [API security](docs/operations/api-security.md) ·
 [Production deployment](docs/operations/production-deployment.md) ·
@@ -38,9 +38,12 @@ reaches `main` only through a dedicated release pull request.
 - Owner, Admin, Operator, and Viewer access control with shared target history
 - Workspace members, scoped API keys, and an immutable control-plane audit log
 - Team report comments and revocable, expiring public read-only report links
-- Responsive React 19 + TypeScript diagnostic dashboard
-- Docker Compose for database-only or full-stack development
-- Backend and frontend test, lint, typecheck, race, and build checks
+- Responsive React 19 + TypeScript interface with persisted light/dark themes
+- Keyboard command palette, compact mobile navigation, and first-run presets
+- Public product/API documentation and an idempotent demo workspace seeder
+- Production Compose with automatic HTTPS and private backend networking
+- Verified PostgreSQL backup and staged restore tooling
+- Backend, frontend, integration, contract, image, and recovery CI gates
 
 ## Architecture
 
@@ -141,10 +144,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
 ICMP probes require raw-socket permission and are capability-detected at
 runtime. The supplied Compose stack grants only `CAP_NET_RAW` to the non-root
-API executable. NetScope v0.4.0 includes application authentication and
-workspace authorization, but production deployment guidance, CSRF hardening,
-dark theme, onboarding, backups, and the final accessibility pass remain part
-of v1.0.0.
+API executable. The supported production baseline is a single-host deployment;
+rate-limit state is local to each API replica. Multi-replica installations
+need an edge or distributed limiter. Metrics are intentionally disabled by
+default and must remain private when enabled.
 
 ## Roadmap
 
@@ -153,7 +156,8 @@ of v1.0.0.
 - **v0.2.0:** ICMP ping, traceroute, comparisons, CSV, capabilities, exact reruns
 - **v0.3.0:** saved targets, schedules, status history, and notifications
 - **v0.4.0:** accounts, workspaces, roles, shared reports, and API keys
-- **v1.0.0:** production hardening, public docs, accessibility, themes, and demo
+- **v1.0.0:** stable public release with production hardening, public docs,
+  accessibility, themes, onboarding, demo data, and recovery tooling
 
 ## License
 
