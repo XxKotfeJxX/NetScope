@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: NetScope API
-  version: 0.2.0
-  description: Concurrent network diagnostics API with persisted results and SSE progress.
+  version: 0.3.0-dev
+  description: Concurrent network diagnostics and scheduled monitoring API.
   license:
     name: MIT
     identifier: MIT
@@ -13,6 +13,8 @@ tags:
     description: Health, readiness, and runtime capabilities.
   - name: Runs
     description: Diagnostic run lifecycle, results, events, and exports.
+  - name: Monitoring
+    description: Saved targets, schedules, history, maintenance, and notifications.
 security: []
 paths:
   /healthz:
@@ -197,11 +199,257 @@ paths:
                 type: string
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/targets:
+    get:
+      tags: [Monitoring]
+      operationId: listTargets
+      summary: List monitored targets
+      responses:
+        "200":
+          description: Monitored target page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TargetPage"
+    post:
+      tags: [Monitoring]
+      operationId: createTarget
+      summary: Save and schedule a monitored target
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TargetInput"
+      responses:
+        "201":
+          description: Target created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoredTarget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/v1/targets/{targetID}:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+    get:
+      tags: [Monitoring]
+      operationId: getTarget
+      summary: Get a monitored target
+      responses:
+        "200":
+          description: Monitored target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoredTarget"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags: [Monitoring]
+      operationId: updateTarget
+      summary: Update target configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TargetInput"
+      responses:
+        "200":
+          description: Updated target
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoredTarget"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Monitoring]
+      operationId: deleteTarget
+      summary: Delete a monitored target and its history
+      responses:
+        "204":
+          description: Target deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/targets/{targetID}/pause:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+    post:
+      tags: [Monitoring]
+      operationId: pauseTarget
+      summary: Pause scheduled checks
+      responses:
+        "204":
+          description: Target paused
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/targets/{targetID}/resume:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+    post:
+      tags: [Monitoring]
+      operationId: resumeTarget
+      summary: Resume scheduled checks
+      responses:
+        "204":
+          description: Target resumed and due immediately
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/targets/{targetID}/checks:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+    get:
+      tags: [Monitoring]
+      operationId: listTargetChecks
+      summary: List target status and latency history
+      responses:
+        "200":
+          description: Monitoring check page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringCheckPage"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/targets/{targetID}/maintenance:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+    get:
+      tags: [Monitoring]
+      operationId: listMaintenanceWindows
+      summary: List target maintenance windows
+      responses:
+        "200":
+          description: Maintenance windows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MaintenanceWindow"
+    post:
+      tags: [Monitoring]
+      operationId: createMaintenanceWindow
+      summary: Schedule a maintenance window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MaintenanceWindowInput"
+      responses:
+        "201":
+          description: Maintenance window created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MaintenanceWindow"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/v1/targets/{targetID}/maintenance/{windowID}:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+      - $ref: "#/components/parameters/WindowID"
+    delete:
+      tags: [Monitoring]
+      operationId: deleteMaintenanceWindow
+      summary: Delete a maintenance window
+      responses:
+        "204":
+          description: Maintenance window deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/targets/{targetID}/notifications:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+    get:
+      tags: [Monitoring]
+      operationId: listNotificationChannels
+      summary: List target notification channels
+      responses:
+        "200":
+          description: Notification channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationChannel"
+    post:
+      tags: [Monitoring]
+      operationId: createNotificationChannel
+      summary: Add an email or webhook channel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationChannelInput"
+      responses:
+        "201":
+          description: Notification channel created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationChannel"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/v1/targets/{targetID}/notifications/{channelID}:
+    parameters:
+      - $ref: "#/components/parameters/TargetID"
+      - $ref: "#/components/parameters/ChannelID"
+    delete:
+      tags: [Monitoring]
+      operationId: deleteNotificationChannel
+      summary: Delete a notification channel
+      responses:
+        "204":
+          description: Notification channel deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/monitoring:
+    get:
+      tags: [Monitoring]
+      operationId: getMonitoringOverview
+      summary: Get active-target counts and the operational journal
+      responses:
+        "200":
+          description: Monitoring overview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonitoringOverview"
 components:
   parameters:
     RunID:
       in: path
       name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TargetID:
+      in: path
+      name: targetID
+      required: true
+      schema:
+        type: string
+        format: uuid
+    WindowID:
+      in: path
+      name: windowID
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ChannelID:
+      in: path
+      name: channelID
       required: true
       schema:
         type: string
@@ -723,6 +971,231 @@ components:
           format: int64
         totalPages:
           type: integer
+    TargetStatus:
+      type: string
+      enum: [pending, operational, warning, unavailable, paused, maintenance]
+    TargetInput:
+      type: object
+      required: [name, address]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        address:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        tags:
+          type: array
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            maxLength: 32
+        checks:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/CheckType"
+        options:
+          $ref: "#/components/schemas/RunOptions"
+        intervalSeconds:
+          type: integer
+          minimum: 60
+          maximum: 86400
+          default: 300
+        failureThreshold:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 3
+    MonitoredTarget:
+      allOf:
+        - $ref: "#/components/schemas/TargetInput"
+        - type: object
+          required:
+            [
+              id,
+              enabled,
+              consecutiveFailures,
+              status,
+              nextCheckAt,
+              createdAt,
+              updatedAt,
+            ]
+          properties:
+            id:
+              type: string
+              format: uuid
+            enabled:
+              type: boolean
+            consecutiveFailures:
+              type: integer
+            status:
+              $ref: "#/components/schemas/TargetStatus"
+            lastCheckedAt:
+              type: string
+              format: date-time
+            lastLatencyMs:
+              type: integer
+              format: int64
+            tlsExpiresAt:
+              type: string
+              format: date-time
+            nextCheckAt:
+              type: string
+              format: date-time
+            createdAt:
+              type: string
+              format: date-time
+            updatedAt:
+              type: string
+              format: date-time
+    TargetPage:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoredTarget"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    MonitoringCheck:
+      type: object
+      required: [id, targetId, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        targetId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/TargetStatus"
+        latencyMs:
+          type: integer
+          format: int64
+        tlsExpiresAt:
+          type: string
+          format: date-time
+        errorMessage:
+          type: string
+        checkedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    MonitoringCheckPage:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringCheck"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+    MaintenanceWindowInput:
+      type: object
+      required: [startsAt, endsAt]
+      properties:
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        reason:
+          type: string
+    MaintenanceWindow:
+      allOf:
+        - $ref: "#/components/schemas/MaintenanceWindowInput"
+        - type: object
+          required: [id, targetId, createdAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            targetId:
+              type: string
+              format: uuid
+            createdAt:
+              type: string
+              format: date-time
+    NotificationChannelInput:
+      type: object
+      required: [kind, destination]
+      properties:
+        kind:
+          type: string
+          enum: [email, webhook]
+        destination:
+          type: string
+    NotificationChannel:
+      allOf:
+        - $ref: "#/components/schemas/NotificationChannelInput"
+        - type: object
+          required: [id, targetId, enabled, createdAt]
+          properties:
+            id:
+              type: string
+              format: uuid
+            targetId:
+              type: string
+              format: uuid
+            enabled:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+    MonitoringJournalEntry:
+      allOf:
+        - $ref: "#/components/schemas/MonitoringCheck"
+        - type: object
+          required: [targetName, targetAddress]
+          properties:
+            targetName:
+              type: string
+            targetAddress:
+              type: string
+    MonitoringOverview:
+      type: object
+      required:
+        [activeTargets, warningTargets, unavailableTargets, recentChecks]
+      properties:
+        activeTargets:
+          type: integer
+          format: int64
+        warningTargets:
+          type: integer
+          format: int64
+        unavailableTargets:
+          type: integer
+          format: int64
+        recentChecks:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonitoringJournalEntry"
     ErrorResponse:
       type: object
       required: [error]

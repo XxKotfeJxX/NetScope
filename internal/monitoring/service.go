@@ -121,6 +121,10 @@ func (s *Service) ListChecks(
 	return s.repository.ListChecks(ctx, targetID, page, pageSize)
 }
 
+func (s *Service) Overview(ctx context.Context, limit int) (Overview, error) {
+	return s.repository.Overview(ctx, limit)
+}
+
 func (s *Service) CreateMaintenanceWindow(
 	ctx context.Context,
 	targetID uuid.UUID,

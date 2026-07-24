@@ -100,3 +100,16 @@ type CheckPage struct {
 	TotalItems int64   `json:"totalItems"`
 	TotalPages int     `json:"totalPages"`
 }
+
+type JournalEntry struct {
+	Check
+	TargetName    string `json:"targetName"`
+	TargetAddress string `json:"targetAddress"`
+}
+
+type Overview struct {
+	ActiveTargets      int64          `json:"activeTargets"`
+	WarningTargets     int64          `json:"warningTargets"`
+	UnavailableTargets int64          `json:"unavailableTargets"`
+	RecentChecks       []JournalEntry `json:"recentChecks"`
+}
