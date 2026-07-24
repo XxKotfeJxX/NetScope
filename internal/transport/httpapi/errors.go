@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 )
@@ -85,6 +86,26 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusNotFound
 		code = "monitored_target_not_found"
 		message = "The monitored target or nested resource was not found."
+	case errors.Is(err, identity.ErrInvalidInput):
+		status = http.StatusBadRequest
+		code = "invalid_identity_input"
+		message = err.Error()
+	case errors.Is(err, identity.ErrEmailExists):
+		status = http.StatusConflict
+		code = "email_already_registered"
+		message = "An account with this email already exists."
+	case errors.Is(err, identity.ErrUnauthenticated):
+		status = http.StatusUnauthorized
+		code = "authentication_required"
+		message = "Sign in to continue."
+	case errors.Is(err, identity.ErrForbidden):
+		status = http.StatusForbidden
+		code = "workspace_permission_denied"
+		message = "Your workspace role does not allow this action."
+	case errors.Is(err, identity.ErrWorkspaceNotFound):
+		status = http.StatusNotFound
+		code = "workspace_not_found"
+		message = "The workspace was not found."
 	}
 
 	writeJSON(w, status, errorEnvelope{Error: apiError{

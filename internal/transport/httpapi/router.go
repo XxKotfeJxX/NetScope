@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -18,15 +19,17 @@ import (
 )
 
 type Dependencies struct {
-	Logger     *slog.Logger
-	Pool       *pgxpool.Pool
-	Version    string
-	WebOrigin  string
-	Runs       *diagnostics.Service
-	Events     diagnostics.EventPublisher
-	Runtime    RuntimeInfo
-	Checks     map[string]Capability
-	Monitoring *monitoring.Service
+	Logger              *slog.Logger
+	Pool                *pgxpool.Pool
+	Version             string
+	WebOrigin           string
+	Runs                *diagnostics.Service
+	Events              diagnostics.EventPublisher
+	Runtime             RuntimeInfo
+	Checks              map[string]Capability
+	Monitoring          *monitoring.Service
+	Identity            *identity.Service
+	SessionCookieSecure bool
 }
 
 type Capability struct {
@@ -64,6 +67,20 @@ func NewRouter(deps Dependencies) http.Handler {
 	}
 	limiter := newRateLimiter(10, time.Minute)
 	router.Route("/api/v1", func(router chi.Router) {
+		if deps.Identity != nil {
+			accounts := identityHandler{
+				service: deps.Identity, cookieSecure: deps.SessionCookieSecure,
+			}
+			router.With(limiter.middleware).Post("/auth/register", accounts.register)
+			router.With(limiter.middleware).Post("/auth/login", accounts.login)
+			router.Post("/auth/logout", accounts.logout)
+			router.Group(func(router chi.Router) {
+				router.Use(accounts.requireAccount)
+				router.Get("/me", accounts.me)
+				router.Get("/workspaces", accounts.listWorkspaces)
+				router.Post("/workspaces", accounts.createWorkspace)
+			})
+		}
 		router.Get("/capabilities", api.capabilities)
 		router.With(limiter.middleware).Post("/runs", api.createRun)
 		router.Get("/runs", api.listRuns)
@@ -171,8 +188,15 @@ func cors(origin string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-ID")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set(
+				"Access-Control-Allow-Headers",
+				"Accept, Authorization, Content-Type, X-Request-ID, X-Workspace-ID",
+			)
+			w.Header().Set(
+				"Access-Control-Allow-Methods",
+				"GET, POST, PUT, PATCH, DELETE, OPTIONS",
+			)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Add("Vary", "Origin")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
