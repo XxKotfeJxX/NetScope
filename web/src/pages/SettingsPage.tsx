@@ -1,5 +1,4 @@
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Server, ShieldCheck, Workflow } from "lucide-react";
 import { api } from "../api/client";
 
 export function SettingsPage() {
@@ -9,63 +8,73 @@ export function SettingsPage() {
   });
 
   const runtime = capabilities.data?.runtime;
-  const cards = [
-    {
-      icon: Server,
-      label: "API version",
-      value: capabilities.data?.version ?? "unavailable",
-    },
-    {
-      icon: Workflow,
-      label: "Run workers",
-      value: runtime ? String(runtime.runWorkers) : "—",
-    },
-    {
-      icon: CheckCircle2,
-      label: "Probe concurrency",
-      value: runtime ? String(runtime.probeConcurrency) : "—",
-    },
-    {
-      icon: ShieldCheck,
-      label: "Network policy",
-      value: runtime?.networkPolicy ?? "—",
-    },
-  ];
 
   return (
-    <main className="page settings-page">
+    <main className="page runtime-page">
       <div className="page-heading">
         <div>
-          <p className="card-kicker">Read-only</p>
-          <h1>Runtime settings</h1>
+          <p className="section-label">Instrument profile</p>
+          <h1>Runtime configuration</h1>
+          <p>Read-only operating limits reported by the active NetScope API.</p>
         </div>
+        <span className="runtime-connection">
+          <i className={capabilities.isSuccess ? "is-online" : "is-checking"} />
+          {capabilities.isSuccess ? "Connected" : "Unavailable"}
+        </span>
       </div>
-      <div className="settings-grid">
-        {cards.map(({ icon: Icon, label, value }) => (
-          <section className="settings-card" key={label}>
-            <Icon size={20} />
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </section>
-        ))}
-      </div>
-      <section className="capabilities-card">
-        <div>
-          <p className="card-kicker">Capabilities</p>
-          <h2>Available checks</h2>
+
+      <section className="runtime-section">
+        <div className="runtime-section-heading">
+          <p className="section-label">01 / Process</p>
+          <h2>Execution profile</h2>
+        </div>
+        <dl className="runtime-table">
+          <div>
+            <dt>API version</dt>
+            <dd>{capabilities.data?.version ?? "unavailable"}</dd>
+          </div>
+          <div>
+            <dt>Run workers</dt>
+            <dd>{runtime?.runWorkers ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Probe concurrency</dt>
+            <dd>{runtime?.probeConcurrency ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Default timeout</dt>
+            <dd>{runtime ? `${runtime.defaultTimeoutMs / 1000}s` : "—"}</dd>
+          </div>
+          <div>
+            <dt>Maximum timeout</dt>
+            <dd>{runtime ? `${runtime.maxTimeoutMs / 1000}s` : "—"}</dd>
+          </div>
+          <div>
+            <dt>Network policy</dt>
+            <dd>{runtime?.networkPolicy ?? "—"}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section className="runtime-section">
+        <div className="runtime-section-heading">
+          <p className="section-label">02 / Capabilities</p>
+          <h2>Available diagnostics</h2>
         </div>
         <div className="capability-list">
           {Object.entries(capabilities.data?.checks ?? {}).map(
             ([name, capability]) => (
-              <span
-                className={capability.available ? "available" : ""}
-                key={name}
-              >
-                {name}
+              <div key={name}>
+                <span className={capability.available ? "available" : ""}>
+                  {capability.available ? "●" : "○"}
+                </span>
+                <strong>{name}</strong>
                 <small>
-                  {capability.available ? "available" : capability.reason}
+                  {capability.available
+                    ? "Available"
+                    : capability.reason || "Unavailable"}
                 </small>
-              </span>
+              </div>
             ),
           )}
         </div>

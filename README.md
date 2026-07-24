@@ -10,8 +10,8 @@ and live progress. It is a diagnostics dashboard—not a subnet scanner,
 vulnerability scanner, packet sniffer, or Nmap replacement.
 
 > `main` currently contains the **v0.0.1 bootstrap**. The `dev` branch contains
-> the first complete vertical slice: target input → persisted run → worker →
-> DNS lookup → SSE progress → browser result.
+> the v0.1.0 release candidate: target input → persisted run → concurrent DNS,
+> TCP, HTTP, and TLS probes → SSE progress → browser result.
 
 ## Features
 
@@ -19,6 +19,9 @@ vulnerability scanner, packet sniffer, or Nmap replacement.
 - PostgreSQL 18.4 connection pooling through pgx
 - Structured JSON logs with request IDs
 - DNS A, AAAA, CNAME, MX, NS, TXT, and PTR inspection
+- Explicit TCP connection checks with typed failure classification
+- HTTP redirects, status, content metadata, hashing, and phase timings
+- TLS protocol, cipher, certificate chain, hostname, and expiry validation
 - Bounded run workers, per-probe timeout, cancellation, and SSE events
 - Persisted run details, history, and JSON export
 - Responsive React 19 + TypeScript diagnostic dashboard
@@ -115,10 +118,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
 ## Known limitations
 
-The current `dev` build implements the first DNS vertical slice. TCP, HTTP, and
-TLS probes are visibly disabled until their implementations land. Public mode
-validates resolved addresses before the DNS run; rebinding-safe custom dialers
-remain required before HTTP/TLS checks can be exposed publicly.
+The current `dev` build implements the v0.1.0 core probes. ICMP ping and
+traceroute remain intentionally disabled until v0.2.0 because their permission
+and platform models differ. NetScope has no authentication yet, so a public
+deployment still requires an external access-control layer.
 
 ## Roadmap
 

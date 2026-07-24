@@ -9,7 +9,11 @@ import (
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/network"
 	dnsprobe "github.com/XxKotfeJxX/netscope/internal/probe/dns"
+	httpProbe "github.com/XxKotfeJxX/netscope/internal/probe/httpcheck"
+	tcpProbe "github.com/XxKotfeJxX/netscope/internal/probe/tcp"
+	tlsProbe "github.com/XxKotfeJxX/netscope/internal/probe/tlscheck"
 	"github.com/XxKotfeJxX/netscope/internal/storage/postgres"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/XxKotfeJxX/netscope/internal/transport/httpapi"
@@ -44,6 +48,13 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 
 	repository := postgres.NewRunRepository(pool)
 	events := diagnostics.NewHub()
+	policy := target.Policy{
+		Public:         cfg.NetworkPolicy == "public",
+		AllowLoopback:  cfg.AllowLoopback,
+		AllowPrivate:   cfg.AllowPrivate,
+		AllowLinkLocal: cfg.AllowLinkLocal,
+	}
+	secureDialer := network.NewSecureDialer(nil, policy, cfg.MaxProbeTimeout)
 	manager := diagnostics.NewManager(
 		repository,
 		events,
@@ -52,17 +63,15 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		cfg.RunQueueSize,
 		cfg.ProbeConcurrency,
 		dnsprobe.New(nil),
+		tcpProbe.New(secureDialer),
+		httpProbe.New(secureDialer),
+		tlsProbe.New(secureDialer),
 	)
 	manager.Start()
 	service := diagnostics.NewService(
 		repository,
 		manager,
-		target.Policy{
-			Public:         cfg.NetworkPolicy == "public",
-			AllowLoopback:  cfg.AllowLoopback,
-			AllowPrivate:   cfg.AllowPrivate,
-			AllowLinkLocal: cfg.AllowLinkLocal,
-		},
+		policy,
 		cfg.DefaultProbeTimeout,
 		cfg.MaxProbeTimeout,
 	)

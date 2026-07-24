@@ -44,6 +44,7 @@ const (
 type RunOptions struct {
 	TimeoutMS       int    `json:"timeoutMs"`
 	TCPPorts        []int  `json:"tcpPorts,omitempty"`
+	HTTPMethod      string `json:"httpMethod"`
 	FollowRedirects bool   `json:"followRedirects"`
 	MaxRedirects    int    `json:"maxRedirects"`
 	IPVersion       string `json:"ipVersion"`

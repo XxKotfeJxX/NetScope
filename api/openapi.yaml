@@ -274,7 +274,7 @@ components:
       enum: [pending, running, passed, warning, failed, skipped, cancelled]
     RunOptions:
       type: object
-      required: [timeoutMs, followRedirects, maxRedirects, ipVersion]
+      required: [timeoutMs, httpMethod, followRedirects, maxRedirects, ipVersion]
       properties:
         timeoutMs:
           type: integer
@@ -289,6 +289,10 @@ components:
             type: integer
             minimum: 1
             maximum: 65535
+        httpMethod:
+          type: string
+          enum: [GET, HEAD]
+          default: GET
         followRedirects:
           type: boolean
           default: true
@@ -353,6 +357,9 @@ components:
         data:
           oneOf:
             - $ref: "#/components/schemas/DNSResult"
+            - $ref: "#/components/schemas/TCPResult"
+            - $ref: "#/components/schemas/HTTPResult"
+            - $ref: "#/components/schemas/TLSResult"
             - type: object
               additionalProperties: true
         errorCode:
@@ -413,6 +420,131 @@ components:
                 type: string
               message:
                 type: string
+    TCPResult:
+      type: object
+      required: [ports]
+      properties:
+        ports:
+          type: array
+          items:
+            type: object
+            required: [port, status, connectTimeMs]
+            properties:
+              port:
+                type: integer
+                minimum: 1
+                maximum: 65535
+              status:
+                type: string
+                enum: [passed, failed, cancelled]
+              resolvedIp:
+                type: string
+              connectTimeMs:
+                type: integer
+                format: int64
+              errorCode:
+                type: string
+              errorMessage:
+                type: string
+    HTTPResult:
+      type: object
+      required: [requestedUrl, method, redirectChain, timings, bodyTruncated]
+      properties:
+        requestedUrl:
+          type: string
+          format: uri
+        finalUrl:
+          type: string
+          format: uri
+        method:
+          type: string
+        statusCode:
+          type: integer
+        protocol:
+          type: string
+        contentType:
+          type: string
+        contentLength:
+          type: integer
+          format: int64
+        redirectChain:
+          type: array
+          items:
+            type: object
+            required: [url, statusCode]
+            properties:
+              url:
+                type: string
+                format: uri
+              statusCode:
+                type: integer
+        resolvedIp:
+          type: string
+        remoteAddress:
+          type: string
+        timings:
+          type: object
+          required: [dnsMs, connectMs, tlsMs, ttfbMs, totalMs]
+          properties:
+            dnsMs:
+              type: integer
+            connectMs:
+              type: integer
+            tlsMs:
+              type: integer
+            ttfbMs:
+              type: integer
+            totalMs:
+              type: integer
+        bodySha256:
+          type: string
+        bodyPreview:
+          type: string
+        bodyTruncated:
+          type: boolean
+    TLSResult:
+      type: object
+      required:
+        [serverName, sans, daysRemaining, hostnameValid, chainValid, selfSigned, expired, warnings]
+      properties:
+        tlsVersion:
+          type: string
+        cipherSuite:
+          type: string
+        serverName:
+          type: string
+        resolvedIp:
+          type: string
+        subject:
+          type: string
+        issuer:
+          type: string
+        serialNumber:
+          type: string
+        sans:
+          type: array
+          items:
+            type: string
+        validFrom:
+          type: string
+          format: date-time
+        validUntil:
+          type: string
+          format: date-time
+        daysRemaining:
+          type: integer
+        hostnameValid:
+          type: boolean
+        chainValid:
+          type: boolean
+        selfSigned:
+          type: boolean
+        expired:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
     DiagnosticRun:
       type: object
       required:
