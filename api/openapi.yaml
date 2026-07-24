@@ -19,6 +19,8 @@ tags:
     description: Account registration, sessions, and current-user context.
   - name: Workspaces
     description: Collaborative workspace lifecycle and membership context.
+  - name: Reports
+    description: Team comments and controlled public diagnostic evidence.
 security:
   - sessionCookie: []
   - bearerSession: []
@@ -372,6 +374,172 @@ paths:
           description: API key revoked
         "403":
           $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Reports]
+      operationId: listRunComments
+      summary: List internal workspace comments for a diagnostic report
+      responses:
+        "200":
+          description: Ordered report comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportComment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Reports]
+      operationId: createRunComment
+      summary: Add an internal comment to a diagnostic report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+      responses:
+        "201":
+          description: Comment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportComment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/comments/{commentID}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: commentID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Reports]
+      operationId: deleteRunComment
+      summary: Delete an owned comment or moderate it as an Admin
+      responses:
+        "204":
+          description: Comment deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/public-links:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Reports]
+      operationId: listPublicReportLinks
+      summary: List public-link metadata for a diagnostic report
+      responses:
+        "200":
+          description: Public links without recoverable secrets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicReportLink"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Reports]
+      operationId: createPublicReportLink
+      summary: Publish a read-only report link and reveal its token once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresAt:
+                  type: string
+                  format: date-time
+                  description: Defaults to 30 days and cannot exceed 365 days.
+      responses:
+        "201":
+          description: Public report link created
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedPublicReportLink"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/public-links/{linkID}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: linkID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Reports]
+      operationId: revokePublicReportLink
+      summary: Revoke an active public report link
+      responses:
+        "204":
+          description: Link revoked
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/public/reports/{token}:
+    get:
+      security: []
+      tags: [Reports]
+      operationId: getPublicReport
+      summary: Resolve a published read-only diagnostic report
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Published diagnostic evidence
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicReport"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/runs:
@@ -1012,6 +1180,99 @@ components:
               type: string
               writeOnly: true
               description: Plaintext credential returned exactly once.
+    ReportComment:
+      type: object
+      required:
+        - id
+        - workspaceId
+        - runId
+        - authorId
+        - authorName
+        - authorEmail
+        - body
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        authorName:
+          type: string
+        authorEmail:
+          type: string
+          format: email
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PublicReportLink:
+      type: object
+      required:
+        [id, workspaceId, runId, tokenPrefix, createdBy, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        tokenPrefix:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        lastViewedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CreatedPublicReportLink:
+      allOf:
+        - $ref: "#/components/schemas/PublicReportLink"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              writeOnly: true
+              description: Secret URL token returned exactly once.
+    PublicReport:
+      type: object
+      required: [workspaceName, publishedAt, expiresAt, run]
+      properties:
+        workspaceName:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        run:
+          $ref: "#/components/schemas/DiagnosticRun"
     RegistrationInput:
       type: object
       required: [email, password, displayName]
