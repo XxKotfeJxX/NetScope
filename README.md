@@ -2,7 +2,7 @@
 
 Technical network diagnostics built with Go and TypeScript.
 
-[API docs](api/openapi.yaml) · [v0.1.0 release notes](docs/releases/v0.1.0.md) ·
+[API docs](api/openapi.yaml) · [v0.2.0 release notes](docs/releases/v0.2.0.md) ·
 [Architecture](#architecture) · [Roadmap](#roadmap)
 
 NetScope accepts one explicit hostname, URL, or IP address and runs focused
@@ -22,8 +22,10 @@ reaches `main` only through a dedicated release pull request.
 - Explicit TCP connection checks with typed failure classification
 - HTTP redirects, status, content metadata, hashing, and phase timings
 - TLS protocol, cipher, certificate chain, hostname, and expiry validation
+- Capability-detected ICMP ping and hop-by-hop traceroute
+- IPv4/IPv6 preference, custom TCP ports, HTTP method, and redirect policy
 - Bounded run workers, per-probe timeout, cancellation, and SSE events
-- Persisted run details, history, and JSON export
+- Persisted run details, history, JSON/CSV export, exact reruns, and comparison
 - Responsive React 19 + TypeScript diagnostic dashboard
 - Docker Compose for database-only or full-stack development
 - Backend and frontend test, lint, typecheck, race, and build checks
@@ -38,6 +40,7 @@ React + TypeScript
 Go HTTP API ──► diagnostic queue ──► bounded worker pool
         │                                  │
         │                                  ├─ DNS
+        │                                  ├─ Ping / Traceroute
         │                                  ├─ TCP
         │                                  ├─ HTTP
         │                                  └─ TLS
@@ -118,17 +121,20 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
 ## Known limitations
 
-The v0.1.0 release implements the four core probes. ICMP ping and traceroute
-remain intentionally disabled until v0.2.0 because their permission and
-platform models differ. NetScope has no authentication yet, so a public
-deployment still requires an external access-control layer.
+ICMP probes require raw-socket permission and are capability-detected at
+runtime. The supplied Compose stack grants only `CAP_NET_RAW` to the non-root
+API executable. NetScope v0.2.0 has no saved targets, schedules, notifications,
+or authentication yet, so a public deployment still requires an external
+access-control layer.
 
 ## Roadmap
 
 - **v0.1.0:** DNS, TCP, HTTP, TLS, worker pool, cancellation, SSE, history,
   JSON export, and PostgreSQL persistence
-- **v0.2.0:** ICMP ping, traceroute, comparisons, CSV, capabilities, metrics
-- **v1.0.0:** accounts, scheduling, notifications, public demo, telemetry
+- **v0.2.0:** ICMP ping, traceroute, comparisons, CSV, capabilities, exact reruns
+- **v0.3.0:** saved targets, schedules, status history, and notifications
+- **v0.4.0:** accounts, workspaces, roles, shared reports, and API keys
+- **v1.0.0:** production hardening, public docs, accessibility, themes, and demo
 
 ## License
 

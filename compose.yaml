@@ -23,13 +23,16 @@ services:
       context: .
     environment:
       APP_ENV: development
-      APP_VERSION: 0.1.0
+      APP_VERSION: 0.2.0
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 8080
       WEB_ORIGIN: http://localhost:5173
       DATABASE_URL: postgres://netscope:netscope@postgres:5432/netscope?sslmode=disable
       NETWORK_POLICY: local
+      ICMP_ENABLED: "true"
       LOG_FORMAT: json
+    cap_add:
+      - NET_RAW
     ports:
       - "8080:8080"
     depends_on:

@@ -12,8 +12,10 @@ import (
 	"github.com/XxKotfeJxX/netscope/internal/network"
 	dnsprobe "github.com/XxKotfeJxX/netscope/internal/probe/dns"
 	httpProbe "github.com/XxKotfeJxX/netscope/internal/probe/httpcheck"
+	pingProbe "github.com/XxKotfeJxX/netscope/internal/probe/ping"
 	tcpProbe "github.com/XxKotfeJxX/netscope/internal/probe/tcp"
 	tlsProbe "github.com/XxKotfeJxX/netscope/internal/probe/tlscheck"
+	traceProbe "github.com/XxKotfeJxX/netscope/internal/probe/traceroute"
 	"github.com/XxKotfeJxX/netscope/internal/storage/postgres"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/XxKotfeJxX/netscope/internal/transport/httpapi"
@@ -55,6 +57,25 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		AllowLinkLocal: cfg.AllowLinkLocal,
 	}
 	secureDialer := network.NewSecureDialer(nil, policy, cfg.MaxProbeTimeout)
+	icmpRunner := network.RawICMPRunner{}
+	icmpAvailable, icmpReason := icmpRunner.Available()
+	if !cfg.ICMPEnabled {
+		icmpAvailable = false
+		icmpReason = "disabled_by_config"
+	}
+	probes := []diagnostics.Probe{
+		dnsprobe.New(nil),
+		tcpProbe.New(secureDialer),
+		httpProbe.New(secureDialer),
+		tlsProbe.New(secureDialer),
+	}
+	if icmpAvailable {
+		probes = append(
+			probes,
+			pingProbe.New(secureDialer, icmpRunner),
+			traceProbe.New(secureDialer, icmpRunner),
+		)
+	}
 	manager := diagnostics.NewManager(
 		repository,
 		events,
@@ -62,10 +83,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		cfg.RunWorkers,
 		cfg.RunQueueSize,
 		cfg.ProbeConcurrency,
-		dnsprobe.New(nil),
-		tcpProbe.New(secureDialer),
-		httpProbe.New(secureDialer),
-		tlsProbe.New(secureDialer),
+		probes...,
 	)
 	manager.Start()
 	service := diagnostics.NewService(
@@ -83,6 +101,12 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		WebOrigin: cfg.WebOrigin,
 		Runs:      service,
 		Events:    events,
+		Checks: map[string]httpapi.Capability{
+			"dns": {Available: true}, "tcp": {Available: true},
+			"http": {Available: true}, "tls": {Available: true},
+			"ping":       {Available: icmpAvailable, Reason: icmpReason},
+			"traceroute": {Available: icmpAvailable, Reason: icmpReason},
+		},
 		Runtime: httpapi.RuntimeInfo{
 			DefaultTimeoutMS: int(cfg.DefaultProbeTimeout.Milliseconds()),
 			MaxTimeoutMS:     int(cfg.MaxProbeTimeout.Milliseconds()),

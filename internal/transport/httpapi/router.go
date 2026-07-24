@@ -24,6 +24,12 @@ type Dependencies struct {
 	Runs      *diagnostics.Service
 	Events    diagnostics.EventPublisher
 	Runtime   RuntimeInfo
+	Checks    map[string]Capability
+}
+
+type Capability struct {
+	Available bool   `json:"available"`
+	Reason    string `json:"reason,omitempty"`
 }
 
 type RuntimeInfo struct {
@@ -51,7 +57,8 @@ func NewRouter(deps Dependencies) http.Handler {
 	router.Get("/readyz", health.ready)
 
 	api := apiHandler{
-		runs: deps.Runs, events: deps.Events, version: deps.Version, runtime: deps.Runtime,
+		runs: deps.Runs, events: deps.Events, version: deps.Version,
+		runtime: deps.Runtime, checks: deps.Checks,
 	}
 	limiter := newRateLimiter(10, time.Minute)
 	router.Route("/api/v1", func(router chi.Router) {

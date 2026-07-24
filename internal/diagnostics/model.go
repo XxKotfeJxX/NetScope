@@ -11,10 +11,12 @@ import (
 type CheckType string
 
 const (
-	CheckDNS  CheckType = "dns"
-	CheckTCP  CheckType = "tcp"
-	CheckHTTP CheckType = "http"
-	CheckTLS  CheckType = "tls"
+	CheckDNS        CheckType = "dns"
+	CheckTCP        CheckType = "tcp"
+	CheckHTTP       CheckType = "http"
+	CheckTLS        CheckType = "tls"
+	CheckPing       CheckType = "ping"
+	CheckTraceroute CheckType = "traceroute"
 )
 
 type RunStatus string
@@ -48,6 +50,8 @@ type RunOptions struct {
 	FollowRedirects bool   `json:"followRedirects"`
 	MaxRedirects    int    `json:"maxRedirects"`
 	IPVersion       string `json:"ipVersion"`
+	PingPackets     int    `json:"pingPackets"`
+	MaxHops         int    `json:"maxHops"`
 }
 
 type DiagnosticRun struct {

@@ -47,6 +47,10 @@ export function DashboardPage() {
           <i />
           <span>DNS</span>
           <i />
+          <span>Ping</span>
+          <i />
+          <span>Trace</span>
+          <i />
           <span>TCP</span>
           <i />
           <span>TLS</span>
@@ -114,7 +118,7 @@ export function DashboardPage() {
                 </p>
               </div>
               <div className="empty-route" aria-hidden="true">
-                target ── DNS ── TCP ── TLS ── HTTP
+                target ── DNS ── Ping ── Trace ── TCP ── TLS ── HTTP
               </div>
             </div>
           )}

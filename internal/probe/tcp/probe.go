@@ -34,6 +34,7 @@ func (p *Probe) Run(
 	options diagnostics.RunOptions,
 ) diagnostics.CheckResult {
 	started := time.Now().UTC()
+	ctx = network.WithIPVersion(ctx, options.IPVersion)
 	ports := append([]int(nil), options.TCPPorts...)
 	resultChannel := make(chan PortResult, len(ports))
 	semaphore := make(chan struct{}, 4)

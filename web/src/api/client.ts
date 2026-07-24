@@ -73,5 +73,6 @@ export const api = {
     request<void>(`/api/v1/runs/${id}/cancel`, { method: "POST" }),
 
   eventURL: (id: string) => `${API_BASE}/api/v1/runs/${id}/events`,
-  exportURL: (id: string) => `${API_BASE}/api/v1/runs/${id}/export?format=json`,
+  exportURL: (id: string, format: "json" | "csv" = "json") =>
+    `${API_BASE}/api/v1/runs/${id}/export?format=${format}`,
 };

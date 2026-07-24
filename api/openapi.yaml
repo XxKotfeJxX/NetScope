@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NetScope API
-  version: 0.1.0
+  version: 0.2.0
   description: Concurrent network diagnostics API with persisted results and SSE progress.
   license:
     name: MIT
@@ -175,12 +175,12 @@ paths:
         name: format
         schema:
           type: string
-          const: json
+          enum: [json, csv]
           default: json
     get:
       tags: [Runs]
       operationId: exportRun
-      summary: Export a run as JSON
+      summary: Export a run as JSON or CSV
       responses:
         "200":
           description: JSON export
@@ -192,6 +192,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DiagnosticRun"
+            text/csv:
+              schema:
+                type: string
         "404":
           $ref: "#/components/responses/NotFound"
 components:
@@ -271,7 +274,7 @@ components:
               enum: [local, public]
     CheckType:
       type: string
-      enum: [dns, tcp, http, tls]
+      enum: [dns, tcp, http, tls, ping, traceroute]
     RunStatus:
       type: string
       enum:
@@ -282,7 +285,15 @@ components:
     RunOptions:
       type: object
       required:
-        [timeoutMs, httpMethod, followRedirects, maxRedirects, ipVersion]
+        [
+          timeoutMs,
+          httpMethod,
+          followRedirects,
+          maxRedirects,
+          ipVersion,
+          pingPackets,
+          maxHops,
+        ]
       properties:
         timeoutMs:
           type: integer
@@ -313,6 +324,16 @@ components:
           type: string
           enum: [auto, ipv4, ipv6]
           default: auto
+        pingPackets:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 4
+        maxHops:
+          type: integer
+          minimum: 1
+          maximum: 64
+          default: 20
     CreateRunRequest:
       type: object
       required: [target, checks]
@@ -369,6 +390,8 @@ components:
             - $ref: "#/components/schemas/TCPResult"
             - $ref: "#/components/schemas/HTTPResult"
             - $ref: "#/components/schemas/TLSResult"
+            - $ref: "#/components/schemas/PingResult"
+            - $ref: "#/components/schemas/TracerouteResult"
             - type: object
               additionalProperties: true
         errorCode:
@@ -563,6 +586,78 @@ components:
           type: array
           items:
             type: string
+    PingResult:
+      type: object
+      required:
+        [
+          address,
+          packetsSent,
+          packetsReceived,
+          packetLossPercent,
+          minRttMs,
+          averageRttMs,
+          maxRttMs,
+          samples,
+        ]
+      properties:
+        address:
+          type: string
+        packetsSent:
+          type: integer
+        packetsReceived:
+          type: integer
+        packetLossPercent:
+          type: number
+          minimum: 0
+          maximum: 100
+        minRttMs:
+          type: number
+        averageRttMs:
+          type: number
+        maxRttMs:
+          type: number
+        samples:
+          type: array
+          items:
+            type: object
+            required: [sequence, status]
+            properties:
+              sequence:
+                type: integer
+              status:
+                type: string
+                enum: [received, timeout]
+              address:
+                type: string
+              rttMs:
+                type: number
+    TracerouteResult:
+      type: object
+      required: [address, reached, maxHops, hops]
+      properties:
+        address:
+          type: string
+        reached:
+          type: boolean
+        maxHops:
+          type: integer
+        hops:
+          type: array
+          items:
+            type: object
+            required: [number, status, destination]
+            properties:
+              number:
+                type: integer
+              status:
+                type: string
+                enum: [replied, timeout]
+              address:
+                type: string
+              rttMs:
+                type: number
+              destination:
+                type: boolean
     DiagnosticRun:
       type: object
       required:

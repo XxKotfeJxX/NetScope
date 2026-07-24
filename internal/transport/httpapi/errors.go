@@ -38,7 +38,7 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, errUnsupportedFormat):
 		status = http.StatusBadRequest
 		code = "unsupported_format"
-		message = "Only JSON export is available."
+		message = "Only JSON and CSV exports are available."
 	case errors.Is(err, target.ErrEmpty),
 		errors.Is(err, target.ErrInvalid),
 		errors.Is(err, target.ErrCIDR),
