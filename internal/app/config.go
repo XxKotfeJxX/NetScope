@@ -29,6 +29,7 @@ type Config struct {
 	AllowPrivate        bool
 	AllowLinkLocal      bool
 	ICMPEnabled         bool
+	MonitoringInterval  time.Duration
 	LogLevel            slog.Level
 	LogFormat           string
 }
@@ -44,6 +45,7 @@ func LoadConfig() (Config, error) {
 		LogFormat:           envString("LOG_FORMAT", "json"),
 		DefaultProbeTimeout: 5 * time.Second,
 		MaxProbeTimeout:     30 * time.Second,
+		MonitoringInterval:  10 * time.Second,
 		LogLevel:            slog.LevelInfo,
 	}
 
@@ -73,6 +75,12 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.MaxProbeTimeout, err = envDuration("MAX_PROBE_TIMEOUT", 30*time.Second); err != nil {
+		return Config{}, err
+	}
+	if cfg.MonitoringInterval, err = envDuration(
+		"MONITORING_POLL_INTERVAL",
+		10*time.Second,
+	); err != nil {
 		return Config{}, err
 	}
 	if cfg.DefaultProbeTimeout > cfg.MaxProbeTimeout {

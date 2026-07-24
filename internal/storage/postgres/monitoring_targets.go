@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/google/uuid"
@@ -333,6 +334,250 @@ func (r *MonitoringRepository) DeleteNotificationChannel(
 		return monitoring.ErrTargetNotFound
 	}
 	return nil
+}
+
+func (r *MonitoringRepository) ClaimDueTargets(
+	ctx context.Context,
+	limit int,
+) ([]monitoring.Target, error) {
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	if _, err := r.pool.Exec(ctx, `
+		UPDATE monitored_targets AS target
+		SET status = 'maintenance',
+			next_check_at = active_window.ends_at,
+			updated_at = NOW()
+		FROM (
+			SELECT target_id, MAX(ends_at) AS ends_at
+			FROM maintenance_windows
+			WHERE starts_at <= NOW() AND ends_at > NOW()
+			GROUP BY target_id
+		) AS active_window
+		WHERE target.id = active_window.target_id
+			AND target.enabled = TRUE
+			AND target.next_check_at <= NOW()
+	`); err != nil {
+		return nil, fmt.Errorf("mark targets in maintenance: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		WITH due AS (
+			SELECT target.id
+			FROM monitored_targets AS target
+			WHERE target.enabled = TRUE
+				AND target.next_check_at <= NOW()
+				AND NOT EXISTS (
+					SELECT 1 FROM monitoring_checks AS check_run
+					WHERE check_run.target_id = target.id
+						AND check_run.checked_at IS NULL
+				)
+				AND NOT EXISTS (
+					SELECT 1 FROM maintenance_windows AS maintenance
+					WHERE maintenance.target_id = target.id
+						AND maintenance.starts_at <= NOW()
+						AND maintenance.ends_at > NOW()
+				)
+			ORDER BY target.next_check_at
+			FOR UPDATE SKIP LOCKED
+			LIMIT $1
+		)
+		UPDATE monitored_targets AS target
+		SET next_check_at = NOW() + make_interval(secs => target.interval_seconds),
+			status = CASE WHEN target.status = 'maintenance' THEN 'pending' ELSE target.status END,
+			updated_at = NOW()
+		FROM due
+		WHERE target.id = due.id
+		RETURNING target.id, target.name, target.address, target.tags,
+			target.requested_checks, target.options, target.interval_seconds,
+			target.enabled, target.failure_threshold, target.consecutive_failures,
+			target.status, target.last_checked_at, target.last_latency_ms,
+			target.tls_expires_at, target.next_check_at, target.created_at,
+			target.updated_at
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("claim due monitored targets: %w", err)
+	}
+	defer rows.Close()
+	items := make([]monitoring.Target, 0, limit)
+	for rows.Next() {
+		target, err := scanMonitoredTarget(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan due monitored target: %w", err)
+		}
+		items = append(items, target)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate due monitored targets: %w", err)
+	}
+	return items, nil
+}
+
+func (r *MonitoringRepository) CreateScheduledCheck(
+	ctx context.Context,
+	targetID uuid.UUID,
+	runID uuid.UUID,
+) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO monitoring_checks (id, target_id, run_id, status)
+		VALUES ($1, $2, $3, 'pending')
+	`, uuid.New(), targetID, runID)
+	if err != nil {
+		return fmt.Errorf("create scheduled monitoring check: %w", err)
+	}
+	return nil
+}
+
+func (r *MonitoringRepository) ListPendingChecks(
+	ctx context.Context,
+	limit int,
+) ([]monitoring.Check, error) {
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, target_id, run_id, status, latency_ms, tls_expires_at,
+			COALESCE(error_message, ''), checked_at, created_at
+		FROM monitoring_checks
+		WHERE checked_at IS NULL AND run_id IS NOT NULL
+		ORDER BY created_at
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list pending monitoring checks: %w", err)
+	}
+	defer rows.Close()
+	items := make([]monitoring.Check, 0, limit)
+	for rows.Next() {
+		var check monitoring.Check
+		if err := rows.Scan(
+			&check.ID, &check.TargetID, &check.RunID, &check.Status,
+			&check.LatencyMS, &check.TLSExpiresAt, &check.ErrorMessage,
+			&check.CheckedAt, &check.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan pending monitoring check: %w", err)
+		}
+		items = append(items, check)
+	}
+	return items, rows.Err()
+}
+
+func (r *MonitoringRepository) CompleteCheck(
+	ctx context.Context,
+	check monitoring.Check,
+) (monitoring.Target, bool, error) {
+	transaction, err := r.pool.Begin(ctx)
+	if err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("begin monitoring completion: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(ctx) }()
+
+	previous, err := scanMonitoredTarget(transaction.QueryRow(ctx, `
+		SELECT id, name, address, tags, requested_checks, options,
+			interval_seconds, enabled, failure_threshold, consecutive_failures,
+			status, last_checked_at, last_latency_ms, tls_expires_at,
+			next_check_at, created_at, updated_at
+		FROM monitored_targets WHERE id = $1 FOR UPDATE
+	`, check.TargetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return monitoring.Target{}, false, monitoring.ErrTargetNotFound
+	}
+	if err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("lock monitored target: %w", err)
+	}
+
+	checkedAt := check.CheckedAt
+	if checkedAt == nil {
+		now := time.Now().UTC()
+		checkedAt = &now
+	}
+	if _, err := transaction.Exec(ctx, `
+		UPDATE monitoring_checks
+		SET status = $2, latency_ms = $3, tls_expires_at = $4,
+			error_message = NULLIF($5, ''), checked_at = $6
+		WHERE id = $1
+	`, check.ID, check.Status, check.LatencyMS, check.TLSExpiresAt,
+		check.ErrorMessage, checkedAt); err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("complete monitoring check: %w", err)
+	}
+
+	failures := 0
+	status := check.Status
+	if check.Status == monitoring.StatusUnavailable {
+		failures = previous.ConsecutiveFailures + 1
+		if failures < previous.FailureThreshold {
+			status = monitoring.StatusWarning
+		}
+	}
+	notify := (previous.Status != monitoring.StatusUnavailable &&
+		status == monitoring.StatusUnavailable) ||
+		(previous.Status == monitoring.StatusUnavailable &&
+			status != monitoring.StatusUnavailable)
+	if _, err := transaction.Exec(ctx, `
+		UPDATE monitored_targets
+		SET consecutive_failures = $2, status = $3, last_checked_at = $4,
+			last_latency_ms = $5,
+			tls_expires_at = COALESCE($6, tls_expires_at),
+			updated_at = NOW()
+		WHERE id = $1
+	`, check.TargetID, failures, status, checkedAt, check.LatencyMS,
+		check.TLSExpiresAt); err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("update monitored target result: %w", err)
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("commit monitoring completion: %w", err)
+	}
+	updated, err := r.GetTarget(ctx, check.TargetID)
+	return updated, notify, err
+}
+
+func (r *MonitoringRepository) RecordDispatchFailure(
+	ctx context.Context,
+	targetID uuid.UUID,
+	message string,
+) (monitoring.Target, bool, error) {
+	transaction, err := r.pool.Begin(ctx)
+	if err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("begin dispatch failure: %w", err)
+	}
+	defer func() { _ = transaction.Rollback(ctx) }()
+	previous, err := scanMonitoredTarget(transaction.QueryRow(ctx, `
+		SELECT id, name, address, tags, requested_checks, options,
+			interval_seconds, enabled, failure_threshold, consecutive_failures,
+			status, last_checked_at, last_latency_ms, tls_expires_at,
+			next_check_at, created_at, updated_at
+		FROM monitored_targets WHERE id = $1 FOR UPDATE
+	`, targetID))
+	if err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("lock dispatch target: %w", err)
+	}
+	now := time.Now().UTC()
+	failures := previous.ConsecutiveFailures + 1
+	status := monitoring.StatusWarning
+	if failures >= previous.FailureThreshold {
+		status = monitoring.StatusUnavailable
+	}
+	if _, err := transaction.Exec(ctx, `
+		INSERT INTO monitoring_checks (
+			id, target_id, status, error_message, checked_at, created_at
+		) VALUES ($1, $2, $3, $4, $5, $5)
+	`, uuid.New(), targetID, status, message, now); err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("record dispatch failure: %w", err)
+	}
+	if _, err := transaction.Exec(ctx, `
+		UPDATE monitored_targets
+		SET consecutive_failures = $2, status = $3, last_checked_at = $4,
+			last_latency_ms = NULL, updated_at = NOW()
+		WHERE id = $1
+	`, targetID, failures, status, now); err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("update dispatch failure: %w", err)
+	}
+	if err := transaction.Commit(ctx); err != nil {
+		return monitoring.Target{}, false, fmt.Errorf("commit dispatch failure: %w", err)
+	}
+	updated, err := r.GetTarget(ctx, targetID)
+	return updated, previous.Status != monitoring.StatusUnavailable &&
+		status == monitoring.StatusUnavailable, err
 }
 
 type rowScanner interface {

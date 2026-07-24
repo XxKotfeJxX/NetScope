@@ -26,4 +26,9 @@ type Repository interface {
 	CreateNotificationChannel(context.Context, NotificationChannel) error
 	ListNotificationChannels(context.Context, uuid.UUID) ([]NotificationChannel, error)
 	DeleteNotificationChannel(context.Context, uuid.UUID, uuid.UUID) error
+	ClaimDueTargets(context.Context, int) ([]Target, error)
+	CreateScheduledCheck(context.Context, uuid.UUID, uuid.UUID) error
+	ListPendingChecks(context.Context, int) ([]Check, error)
+	CompleteCheck(context.Context, Check) (Target, bool, error)
+	RecordDispatchFailure(context.Context, uuid.UUID, string) (Target, bool, error)
 }

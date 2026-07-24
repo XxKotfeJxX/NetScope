@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/XxKotfeJxX/netscope/internal/network"
 	dnsprobe "github.com/XxKotfeJxX/netscope/internal/probe/dns"
 	httpProbe "github.com/XxKotfeJxX/netscope/internal/probe/httpcheck"
@@ -23,11 +24,12 @@ import (
 )
 
 type App struct {
-	config  Config
-	logger  *slog.Logger
-	pool    *pgxpool.Pool
-	manager *diagnostics.Manager
-	server  *http.Server
+	config    Config
+	logger    *slog.Logger
+	pool      *pgxpool.Pool
+	manager   *diagnostics.Manager
+	scheduler *monitoring.Scheduler
+	server    *http.Server
 }
 
 func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
@@ -93,6 +95,15 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		cfg.DefaultProbeTimeout,
 		cfg.MaxProbeTimeout,
 	)
+	monitoringRepository := postgres.NewMonitoringRepository(pool)
+	scheduler := monitoring.NewScheduler(
+		monitoringRepository,
+		service,
+		monitoring.NopNotifier{},
+		logger,
+		cfg.MonitoringInterval,
+	)
+	scheduler.Start()
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
 		Logger:    logger,
@@ -125,7 +136,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	return &App{config: cfg, logger: logger, pool: pool, manager: manager, server: server}, nil
+	return &App{
+		config: cfg, logger: logger, pool: pool, manager: manager,
+		scheduler: scheduler, server: server,
+	}, nil
 }
 
 func (a *App) Run(ctx context.Context) error {
@@ -144,6 +158,9 @@ func (a *App) Run(ctx context.Context) error {
 		if err := a.server.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("shutdown HTTP server: %w", err)
 		}
+		if err := a.scheduler.Shutdown(shutdownCtx); err != nil {
+			return fmt.Errorf("shutdown monitoring scheduler: %w", err)
+		}
 		if err := a.manager.Shutdown(shutdownCtx); err != nil {
 			return fmt.Errorf("shutdown diagnostic workers: %w", err)
 		}
@@ -152,6 +169,7 @@ func (a *App) Run(ctx context.Context) error {
 	case err := <-serverErrors:
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		_ = a.scheduler.Shutdown(shutdownCtx)
 		_ = a.manager.Shutdown(shutdownCtx)
 		if errors.Is(err, http.ErrServerClosed) {
 			return nil

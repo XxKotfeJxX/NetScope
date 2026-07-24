@@ -34,6 +34,22 @@ func (availableRuns) Supports(check diagnostics.CheckType) bool {
 	return check == diagnostics.CheckDNS || check == diagnostics.CheckHTTP
 }
 
+func (availableRuns) Create(
+	context.Context,
+	string,
+	[]diagnostics.CheckType,
+	diagnostics.RunOptions,
+) (diagnostics.DiagnosticRun, error) {
+	return diagnostics.DiagnosticRun{}, nil
+}
+
+func (availableRuns) Get(
+	context.Context,
+	uuid.UUID,
+) (diagnostics.DiagnosticRun, error) {
+	return diagnostics.DiagnosticRun{}, nil
+}
+
 func TestCreateTargetNormalizesDefaultsAndTags(t *testing.T) {
 	t.Parallel()
 

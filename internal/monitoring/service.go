@@ -23,6 +23,13 @@ type Service struct {
 
 type RunService interface {
 	Supports(diagnostics.CheckType) bool
+	Create(
+		context.Context,
+		string,
+		[]diagnostics.CheckType,
+		diagnostics.RunOptions,
+	) (diagnostics.DiagnosticRun, error)
+	Get(context.Context, uuid.UUID) (diagnostics.DiagnosticRun, error)
 }
 
 func NewService(repository Repository, runs RunService) *Service {
