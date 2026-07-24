@@ -3,6 +3,7 @@ import type {
   AuditPage,
   Capabilities,
   CheckType,
+  CreatedWorkspaceAPIKey,
   CurrentAccount,
   DiagnosticRun,
   MaintenanceWindow,
@@ -15,6 +16,7 @@ import type {
   TargetInput,
   TargetPage,
   Workspace,
+  WorkspaceAPIKey,
   WorkspaceMember,
   WorkspaceRole,
 } from "./types";
@@ -118,6 +120,21 @@ export const api = {
     }),
   workspaceAudit: () =>
     request<AuditPage>("/api/v1/workspace/audit?page=1&pageSize=20"),
+  listWorkspaceAPIKeys: () =>
+    request<WorkspaceAPIKey[]>("/api/v1/workspace/api-keys"),
+  createWorkspaceAPIKey: (payload: {
+    name: string;
+    role: "operator" | "viewer";
+    expiresAt: string;
+  }) =>
+    request<CreatedWorkspaceAPIKey>("/api/v1/workspace/api-keys", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  revokeWorkspaceAPIKey: (keyID: string) =>
+    request<void>(`/api/v1/workspace/api-keys/${keyID}`, {
+      method: "DELETE",
+    }),
 
   createRun: (payload: {
     target: string;

@@ -2921,6 +2921,106 @@ p {
   border-top: 1px solid var(--line-strong);
 }
 
+.api-keys-panel {
+  padding: 42px 0;
+}
+
+.api-key-create {
+  grid-template-columns: minmax(220px, 1fr) 150px 150px 140px;
+}
+
+.key-reveal {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) minmax(280px, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+}
+
+.key-reveal > div {
+  display: grid;
+  gap: 3px;
+}
+
+.key-reveal strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.key-reveal span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.key-reveal code {
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.key-reveal button,
+.api-key-row button {
+  color: var(--accent);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  background: transparent;
+}
+
+.api-key-list {
+  margin-top: 24px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.api-key-list > p {
+  padding: 22px 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.api-key-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 90px 90px 180px 65px;
+  gap: 18px;
+  align-items: center;
+  min-height: 70px;
+  border-bottom: 1px solid var(--line);
+}
+
+.api-key-row > div {
+  display: grid;
+  gap: 5px;
+}
+
+.api-key-row strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.api-key-row code,
+.api-key-row > span,
+.api-key-row time {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+}
+
+.api-key-row .key-status {
+  color: var(--success);
+  text-transform: uppercase;
+}
+
+.api-key-row .key-status.is-revoked,
+.api-key-row .key-status.is-expired {
+  color: var(--danger);
+}
+
+.api-key-row button:disabled {
+  color: var(--faint);
+}
+
 .member-row {
   display: grid;
   grid-template-columns: 38px minmax(220px, 1fr) 150px 80px;
@@ -3035,6 +3135,16 @@ p {
   .member-invite,
   .audit-journal {
     grid-template-columns: 1fr;
+  }
+
+  .key-reveal,
+  .api-key-row {
+    grid-template-columns: 1fr;
+  }
+
+  .api-key-row {
+    gap: 8px;
+    padding: 16px 0;
   }
 
   .member-row {

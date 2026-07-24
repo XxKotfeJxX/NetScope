@@ -1,7 +1,12 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import type { AuditEvent, WorkspaceMember, WorkspaceRole } from "../api/types";
+import type {
+  AuditEvent,
+  WorkspaceAPIKey,
+  WorkspaceMember,
+  WorkspaceRole,
+} from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 
 type WorkspaceTab = "overview" | "members" | "api-keys" | "settings";
@@ -15,9 +20,15 @@ export function WorkspacePage() {
   const [creating, setCreating] = useState(false);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
   const [audit, setAudit] = useState<AuditEvent[]>([]);
+  const [apiKeys, setAPIKeys] = useState<WorkspaceAPIKey[]>([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<WorkspaceRole>("viewer");
   const [busyMember, setBusyMember] = useState("");
+  const [keyName, setKeyName] = useState("");
+  const [keyRole, setKeyRole] = useState<"operator" | "viewer">("viewer");
+  const [keyTTL, setKeyTTL] = useState("90");
+  const [busyKey, setBusyKey] = useState("");
+  const [revealedToken, setRevealedToken] = useState("");
   const [error, setError] = useState("");
 
   const canManage =
@@ -27,11 +38,16 @@ export function WorkspacePage() {
   useEffect(() => {
     if (!account || !canManage) return;
     let active = true;
-    Promise.all([api.listWorkspaceMembers(), api.workspaceAudit()])
-      .then(([nextMembers, nextAudit]) => {
+    Promise.all([
+      api.listWorkspaceMembers(),
+      api.workspaceAudit(),
+      api.listWorkspaceAPIKeys(),
+    ])
+      .then(([nextMembers, nextAudit, nextAPIKeys]) => {
         if (!active) return;
         setMembers(nextMembers);
         setAudit(nextAudit.items);
+        setAPIKeys(nextAPIKeys);
         setError("");
       })
       .catch((reason: unknown) => {
@@ -116,6 +132,50 @@ export function WorkspacePage() {
   async function refreshAudit() {
     const page = await api.workspaceAudit();
     setAudit(page.items);
+  }
+
+  async function submitAPIKey(event: FormEvent) {
+    event.preventDefault();
+    if (!keyName.trim()) return;
+    setBusyKey("new");
+    setError("");
+    try {
+      const expiresAt = new Date(
+        Date.now() + Number(keyTTL) * 24 * 60 * 60 * 1000,
+      ).toISOString();
+      const created = await api.createWorkspaceAPIKey({
+        name: keyName.trim(),
+        role: keyRole,
+        expiresAt,
+      });
+      setAPIKeys((current) => [created, ...current]);
+      setKeyName("");
+      setRevealedToken(created.token);
+      await refreshAudit();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Request failed.");
+    } finally {
+      setBusyKey("");
+    }
+  }
+
+  async function revokeAPIKey(key: WorkspaceAPIKey) {
+    setBusyKey(key.id);
+    setError("");
+    try {
+      await api.revokeWorkspaceAPIKey(key.id);
+      const revokedAt = new Date().toISOString();
+      setAPIKeys((current) =>
+        current.map((item) =>
+          item.id === key.id ? { ...item, revokedAt } : item,
+        ),
+      );
+      await refreshAudit();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Request failed.");
+    } finally {
+      setBusyKey("");
+    }
   }
 
   return (
@@ -230,13 +290,29 @@ export function WorkspacePage() {
           </section>
         ))}
 
-      {tab === "api-keys" && (
-        <section className="workspace-next">
-          <p className="section-label">PROGRAMMATIC ACCESS</p>
-          <h2>API keys</h2>
-          <p>Scoped credentials arrive in the next v0.4 workspace revision.</p>
-        </section>
-      )}
+      {tab === "api-keys" &&
+        (canManage ? (
+          <APIKeysPanel
+            keys={apiKeys}
+            name={keyName}
+            role={keyRole}
+            ttl={keyTTL}
+            busyKey={busyKey}
+            revealedToken={revealedToken}
+            onName={setKeyName}
+            onRole={setKeyRole}
+            onTTL={setKeyTTL}
+            onSubmit={submitAPIKey}
+            onRevoke={revokeAPIKey}
+            onDismissToken={() => setRevealedToken("")}
+          />
+        ) : (
+          <section className="workspace-next">
+            <p className="section-label">PROGRAMMATIC ACCESS</p>
+            <h2>Admin access required</h2>
+            <p>Only workspace Owners and Admins can manage API keys.</p>
+          </section>
+        ))}
 
       {tab === "settings" && (
         <section className="workspace-next">
@@ -249,6 +325,137 @@ export function WorkspacePage() {
         </section>
       )}
     </main>
+  );
+}
+
+function APIKeysPanel({
+  keys,
+  name,
+  role,
+  ttl,
+  busyKey,
+  revealedToken,
+  onName,
+  onRole,
+  onTTL,
+  onSubmit,
+  onRevoke,
+  onDismissToken,
+}: {
+  keys: WorkspaceAPIKey[];
+  name: string;
+  role: "operator" | "viewer";
+  ttl: string;
+  busyKey: string;
+  revealedToken: string;
+  onName: (name: string) => void;
+  onRole: (role: "operator" | "viewer") => void;
+  onTTL: (ttl: string) => void;
+  onSubmit: (event: FormEvent) => void;
+  onRevoke: (key: WorkspaceAPIKey) => void;
+  onDismissToken: () => void;
+}) {
+  const [referenceTime] = useState(Date.now);
+
+  return (
+    <section className="api-keys-panel">
+      <div className="members-heading">
+        <div>
+          <p className="section-label">
+            PROGRAMMATIC ACCESS / {keys.length} KEYS
+          </p>
+          <h2>Workspace API keys</h2>
+        </div>
+        <p>Secrets are shown once. Stored credentials are one-way hashes.</p>
+      </div>
+      {revealedToken && (
+        <div className="key-reveal" role="status">
+          <div>
+            <strong>Copy this key now</strong>
+            <span>It cannot be recovered after this notice is closed.</span>
+          </div>
+          <code>{revealedToken}</code>
+          <button
+            type="button"
+            onClick={() => void navigator.clipboard.writeText(revealedToken)}
+          >
+            Copy
+          </button>
+          <button type="button" onClick={onDismissToken}>
+            Done
+          </button>
+        </div>
+      )}
+      <form className="member-invite api-key-create" onSubmit={onSubmit}>
+        <label>
+          Key name
+          <input
+            value={name}
+            onChange={(event) => onName(event.target.value)}
+            placeholder="CI diagnostics"
+            maxLength={100}
+            required
+          />
+        </label>
+        <label>
+          Role
+          <select
+            value={role}
+            onChange={(event) =>
+              onRole(event.target.value as "operator" | "viewer")
+            }
+          >
+            <option value="viewer">viewer</option>
+            <option value="operator">operator</option>
+          </select>
+        </label>
+        <label>
+          Expires
+          <select value={ttl} onChange={(event) => onTTL(event.target.value)}>
+            <option value="30">30 days</option>
+            <option value="90">90 days</option>
+            <option value="365">365 days</option>
+          </select>
+        </label>
+        <button type="submit" disabled={busyKey === "new"}>
+          {busyKey === "new" ? "Creating…" : "Create key"}
+        </button>
+      </form>
+      <div className="api-key-list">
+        {keys.length === 0 ? (
+          <p>No API keys issued for this workspace.</p>
+        ) : (
+          keys.map((key) => {
+            const expired = new Date(key.expiresAt).getTime() <= referenceTime;
+            const status = key.revokedAt
+              ? "revoked"
+              : expired
+                ? "expired"
+                : "active";
+            return (
+              <article key={key.id} className="api-key-row">
+                <div>
+                  <strong>{key.name}</strong>
+                  <code>{key.prefix}…</code>
+                </div>
+                <span>{key.role}</span>
+                <span className={`key-status is-${status}`}>{status}</span>
+                <time dateTime={key.expiresAt}>
+                  expires {new Date(key.expiresAt).toLocaleDateString()}
+                </time>
+                <button
+                  type="button"
+                  disabled={status !== "active" || busyKey === key.id}
+                  onClick={() => onRevoke(key)}
+                >
+                  Revoke
+                </button>
+              </article>
+            );
+          })
+        )}
+      </div>
+    </section>
   );
 }
 

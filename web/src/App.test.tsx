@@ -72,33 +72,35 @@ describe("App", () => {
                   joinedAt: "2026-07-24T10:00:00Z",
                 },
               ]
-            : path.includes("/api/v1/workspace/audit")
-              ? {
-                  items: [],
-                  page: 1,
-                  pageSize: 20,
-                  totalItems: 0,
-                  totalPages: 0,
-                }
-              : path.includes("capabilities")
+            : path.includes("/api/v1/workspace/api-keys")
+              ? []
+              : path.includes("/api/v1/workspace/audit")
                 ? {
-                    version: "test",
-                    checks: { dns: { available: true } },
-                    runtime: {
-                      defaultTimeoutMs: 5000,
-                      maxTimeoutMs: 30000,
-                      runWorkers: 4,
-                      probeConcurrency: 8,
-                      networkPolicy: "local",
-                    },
-                  }
-                : {
                     items: [],
                     page: 1,
-                    pageSize: 5,
+                    pageSize: 20,
                     totalItems: 0,
                     totalPages: 0,
-                  };
+                  }
+                : path.includes("capabilities")
+                  ? {
+                      version: "test",
+                      checks: { dns: { available: true } },
+                      runtime: {
+                        defaultTimeoutMs: 5000,
+                        maxTimeoutMs: 30000,
+                        runWorkers: 4,
+                        probeConcurrency: 8,
+                        networkPolicy: "local",
+                      },
+                    }
+                  : {
+                      items: [],
+                      page: 1,
+                      pageSize: 5,
+                      totalItems: 0,
+                      totalPages: 0,
+                    };
         return {
           ok: true,
           status: 200,
@@ -173,6 +175,13 @@ describe("App", () => {
     expect(screen.getAllByText("owner@example.com")).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: /add member/i }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "API Keys" }));
+    expect(
+      screen.getByRole("heading", { name: /workspace api keys/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /create key/i }),
     ).toBeInTheDocument();
   });
 });
