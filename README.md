@@ -2,7 +2,7 @@
 
 Technical network diagnostics built with Go and TypeScript.
 
-[API docs](api/openapi.yaml) · [v0.3.0 release notes](docs/releases/v0.3.0.md) ·
+[API docs](api/openapi.yaml) · [v0.4.0 release notes](docs/releases/v0.4.0.md) ·
 [Architecture](#architecture) · [Roadmap](#roadmap)
 
 NetScope accepts one explicit hostname, URL, or IP address and runs focused
@@ -30,6 +30,10 @@ reaches `main` only through a dedicated release pull request.
 - Scheduled availability, latency, and TLS-expiry history
 - Consecutive-failure thresholds, pause/resume, and maintenance windows
 - Recovery and outage alerts through SSRF-protected webhooks or SMTP email
+- Argon2id accounts, opaque sessions, and isolated multi-workspace tenancy
+- Owner, Admin, Operator, and Viewer access control with shared target history
+- Workspace members, scoped API keys, and an immutable control-plane audit log
+- Team report comments and revocable, expiring public read-only report links
 - Responsive React 19 + TypeScript diagnostic dashboard
 - Docker Compose for database-only or full-stack development
 - Backend and frontend test, lint, typecheck, race, and build checks
@@ -133,9 +137,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
 ICMP probes require raw-socket permission and are capability-detected at
 runtime. The supplied Compose stack grants only `CAP_NET_RAW` to the non-root
-API executable. NetScope v0.3.0 has no application authentication or
-multi-user workspaces yet, so a public deployment still requires an external
-access-control layer.
+API executable. NetScope v0.4.0 includes application authentication and
+workspace authorization, but production deployment guidance, CSRF hardening,
+dark theme, onboarding, backups, and the final accessibility pass remain part
+of v1.0.0.
 
 ## Roadmap
 
