@@ -13,7 +13,7 @@ export function HTTPResult({ result }: { result: CheckResult }) {
 
   return (
     <ResultSection
-      index="05"
+      index="07"
       title="HTTP response"
       layer="Application layer"
       result={result}

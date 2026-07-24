@@ -5,9 +5,11 @@ import { api } from "../api/client";
 import { DiagnosticRoute } from "../components/DiagnosticRoute";
 import { DNSResult } from "../components/DNSResult";
 import { HTTPResult } from "../components/HTTPResult";
+import { PingResult } from "../components/PingResult";
 import { StatusBadge } from "../components/StatusBadge";
 import { TCPResult } from "../components/TCPResult";
 import { TLSResult } from "../components/TLSResult";
+import { TracerouteResult } from "../components/TracerouteResult";
 
 const activeStatuses = new Set(["queued", "running"]);
 
@@ -72,6 +74,10 @@ export function RunPage() {
   const tcp = data.results.find((result) => result.type === "tcp");
   const http = data.results.find((result) => result.type === "http");
   const tls = data.results.find((result) => result.type === "tls");
+  const ping = data.results.find((result) => result.type === "ping");
+  const traceroute = data.results.find(
+    (result) => result.type === "traceroute",
+  );
   const active = activeStatuses.has(data.status);
 
   return (
@@ -150,11 +156,13 @@ export function RunPage() {
 
           <div className="result-ledger">
             <div className="ledger-heading">
-              <p className="section-label">02–05 / Technical record</p>
+              <p className="section-label">02–07 / Technical record</p>
               <h2>Detailed results</h2>
               <p>Expand a stage to inspect structured output and raw data.</p>
             </div>
             {dns && <DNSResult result={dns} />}
+            {ping && <PingResult result={ping} />}
+            {traceroute && <TracerouteResult result={traceroute} />}
             {tcp && <TCPResult result={tcp} />}
             {tls && <TLSResult result={tls} />}
             {http && <HTTPResult result={http} />}

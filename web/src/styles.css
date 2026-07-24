@@ -1182,6 +1182,57 @@ p {
   grid-template-columns: 66px 100px minmax(0, 1fr) 72px;
 }
 
+.ping-grid,
+.trace-grid {
+  grid-template-columns: 66px 100px minmax(0, 1fr) 88px;
+}
+
+.metric-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+}
+
+.metric-strip > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 15px;
+}
+
+.metric-strip > div + div {
+  border-left: 1px solid var(--line);
+}
+
+.metric-strip span,
+.trace-summary span {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.metric-strip strong,
+.trace-summary strong {
+  overflow: hidden;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trace-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
 .data-grid-header {
   min-height: 34px;
   color: var(--muted);
@@ -1810,8 +1861,27 @@ p {
     grid-template-columns: 52px 90px minmax(0, 1fr);
   }
 
+  .ping-grid,
+  .trace-grid {
+    grid-template-columns: 42px 82px minmax(0, 1fr);
+  }
+
   .port-grid > :last-child {
     display: none;
+  }
+
+  .ping-grid > :last-child,
+  .trace-grid > :last-child {
+    display: none;
+  }
+
+  .metric-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .metric-strip > div + div {
+    border-top: 1px solid var(--line);
+    border-left: 0;
   }
 
   .technical-row,
