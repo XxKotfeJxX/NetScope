@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/mail"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -40,6 +41,14 @@ type Config struct {
 	SMTPTLSMode         string
 	SessionTTL          time.Duration
 	SessionCookieSecure bool
+	CSRFProtection      bool
+	TrustedProxyHeaders bool
+	RateLimitWindow     time.Duration
+	RateLimitGeneral    int
+	RateLimitAuth       int
+	RateLimitMutation   int
+	RateLimitPublic     int
+	MetricsEnabled      bool
 	LogLevel            slog.Level
 	LogFormat           string
 }
@@ -63,6 +72,7 @@ func LoadConfig() (Config, error) {
 		SMTPFrom:            strings.TrimSpace(os.Getenv("SMTP_FROM")),
 		SMTPTLSMode:         envString("SMTP_TLS_MODE", "starttls"),
 		SessionTTL:          30 * 24 * time.Hour,
+		RateLimitWindow:     time.Minute,
 		LogLevel:            slog.LevelInfo,
 	}
 
@@ -112,6 +122,29 @@ func LoadConfig() (Config, error) {
 	); err != nil {
 		return Config{}, err
 	}
+	if cfg.RateLimitWindow, err = envDuration(
+		"RATE_LIMIT_WINDOW",
+		time.Minute,
+	); err != nil {
+		return Config{}, err
+	}
+	if cfg.RateLimitGeneral, err = envInt("RATE_LIMIT_GENERAL", 300, 1, 100000); err != nil {
+		return Config{}, err
+	}
+	if cfg.RateLimitAuth, err = envInt("RATE_LIMIT_AUTH", 10, 1, 10000); err != nil {
+		return Config{}, err
+	}
+	if cfg.RateLimitMutation, err = envInt(
+		"RATE_LIMIT_MUTATION",
+		60,
+		1,
+		100000,
+	); err != nil {
+		return Config{}, err
+	}
+	if cfg.RateLimitPublic, err = envInt("RATE_LIMIT_PUBLIC", 60, 1, 100000); err != nil {
+		return Config{}, err
+	}
 	if cfg.SMTPPort, err = envInt("SMTP_PORT", 587, 1, 65535); err != nil {
 		return Config{}, err
 	}
@@ -134,6 +167,18 @@ func LoadConfig() (Config, error) {
 		"SESSION_COOKIE_SECURE",
 		cfg.Environment != "development",
 	); err != nil {
+		return Config{}, err
+	}
+	if cfg.CSRFProtection, err = envBool(
+		"CSRF_PROTECTION_ENABLED",
+		cfg.Environment == "production",
+	); err != nil {
+		return Config{}, err
+	}
+	if cfg.TrustedProxyHeaders, err = envBool("TRUST_PROXY_HEADERS", false); err != nil {
+		return Config{}, err
+	}
+	if cfg.MetricsEnabled, err = envBool("METRICS_ENABLED", false); err != nil {
 		return Config{}, err
 	}
 	if cfg.NetworkPolicy != "local" && cfg.NetworkPolicy != "public" {
@@ -162,6 +207,27 @@ func LoadConfig() (Config, error) {
 	}
 	if cfg.LogFormat != "json" && cfg.LogFormat != "text" {
 		return Config{}, fmt.Errorf("LOG_FORMAT must be json or text")
+	}
+	webOrigin, err := url.Parse(cfg.WebOrigin)
+	if err != nil ||
+		webOrigin.Scheme == "" ||
+		webOrigin.Host == "" ||
+		webOrigin.Path != "" ||
+		webOrigin.RawQuery != "" ||
+		webOrigin.Fragment != "" ||
+		(webOrigin.Scheme != "http" && webOrigin.Scheme != "https") {
+		return Config{}, fmt.Errorf("WEB_ORIGIN must be an HTTP(S) origin without a path")
+	}
+	if cfg.Environment == "production" {
+		if webOrigin.Scheme != "https" {
+			return Config{}, fmt.Errorf("WEB_ORIGIN must use HTTPS in production")
+		}
+		if !cfg.SessionCookieSecure {
+			return Config{}, fmt.Errorf("SESSION_COOKIE_SECURE must be true in production")
+		}
+		if !cfg.CSRFProtection {
+			return Config{}, fmt.Errorf("CSRF_PROTECTION_ENABLED must be true in production")
+		}
 	}
 
 	return cfg, nil
