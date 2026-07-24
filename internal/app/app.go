@@ -97,10 +97,29 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 	)
 	monitoringRepository := postgres.NewMonitoringRepository(pool)
 	monitoringService := monitoring.NewService(monitoringRepository, service)
+	webhookSender := monitoring.NewWebhookSender(
+		secureDialer,
+		cfg.NotificationTimeout,
+		cfg.Version,
+	)
+	var emailSender monitoring.EmailDelivery
+	if cfg.SMTPHost != "" {
+		emailSender = monitoring.NewSMTPSender(monitoring.SMTPConfig{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort,
+			Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
+			From: cfg.SMTPFrom, TLSMode: cfg.SMTPTLSMode,
+			Timeout: cfg.NotificationTimeout,
+		})
+	}
+	notifier := monitoring.NewChannelNotifier(
+		monitoringRepository,
+		webhookSender,
+		emailSender,
+	)
 	scheduler := monitoring.NewScheduler(
 		monitoringRepository,
 		service,
-		monitoring.NopNotifier{},
+		notifier,
 		logger,
 		cfg.MonitoringInterval,
 	)
