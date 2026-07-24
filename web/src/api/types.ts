@@ -168,6 +168,95 @@ export interface TracerouteData {
   }>;
 }
 
+export type TargetStatus =
+  | "pending"
+  | "operational"
+  | "warning"
+  | "unavailable"
+  | "paused"
+  | "maintenance";
+
+export interface TargetInput {
+  name: string;
+  address: string;
+  tags: string[];
+  checks: CheckType[];
+  options: RunOptions;
+  intervalSeconds: number;
+  failureThreshold: number;
+}
+
+export interface MonitoredTarget extends TargetInput {
+  id: string;
+  enabled: boolean;
+  consecutiveFailures: number;
+  status: TargetStatus;
+  lastCheckedAt?: string;
+  lastLatencyMs?: number;
+  tlsExpiresAt?: string;
+  nextCheckAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TargetPage {
+  items: MonitoredTarget[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface MonitoringCheck {
+  id: string;
+  targetId: string;
+  runId?: string;
+  status: TargetStatus;
+  latencyMs?: number;
+  tlsExpiresAt?: string;
+  errorMessage?: string;
+  checkedAt?: string;
+  createdAt: string;
+}
+
+export interface MonitoringCheckPage {
+  items: MonitoringCheck[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface MaintenanceWindow {
+  id: string;
+  targetId: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface NotificationChannel {
+  id: string;
+  targetId: string;
+  kind: "email" | "webhook";
+  destination: string;
+  enabled: boolean;
+  createdAt: string;
+}
+
+export interface MonitoringJournalEntry extends MonitoringCheck {
+  targetName: string;
+  targetAddress: string;
+}
+
+export interface MonitoringOverview {
+  activeTargets: number;
+  warningTargets: number;
+  unavailableTargets: number;
+  recentChecks: MonitoringJournalEntry[];
+}
+
 export interface APIError {
   error: {
     code: string;
