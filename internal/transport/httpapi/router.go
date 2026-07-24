@@ -17,7 +17,6 @@ import (
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/XxKotfeJxX/netscope/internal/reports"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -35,6 +34,19 @@ type Dependencies struct {
 	Collaboration       *collaboration.Service
 	Reports             *reports.Service
 	SessionCookieSecure bool
+	Security            SecurityConfig
+	MetricsEnabled      bool
+}
+
+type SecurityConfig struct {
+	Production        bool
+	CSRFProtection    bool
+	TrustProxyHeaders bool
+	RateLimitWindow   time.Duration
+	RateLimitGeneral  int
+	RateLimitAuth     int
+	RateLimitMutation int
+	RateLimitPublic   int
 }
 
 type Capability struct {
@@ -56,26 +68,62 @@ type healthHandler struct {
 }
 
 func NewRouter(deps Dependencies) http.Handler {
+	if deps.Logger == nil {
+		deps.Logger = slog.Default()
+	}
+	metrics := &Metrics{}
 	router := chi.NewRouter()
-	router.Use(middleware.Recoverer)
+	router.Use(securityHeaders(deps.Security.Production))
 	router.Use(requestID)
 	router.Use(requestLogger(deps.Logger))
+	router.Use(metrics.middleware)
+	router.Use(recoverPanics(deps.Logger, metrics))
+	router.Use(errorTracking(deps.Logger))
 	router.Use(cors(deps.WebOrigin))
 
 	health := healthHandler{pool: deps.Pool, version: deps.Version}
 	router.Get("/healthz", health.live)
 	router.Get("/readyz", health.ready)
+	if deps.MetricsEnabled {
+		router.Get("/metrics", metrics.serveHTTP)
+	}
 
 	api := apiHandler{
 		runs: deps.Runs, events: deps.Events, version: deps.Version,
 		runtime: deps.Runtime, checks: deps.Checks, monitoring: deps.Monitoring,
 	}
-	limiter := newRateLimiter(10, time.Minute)
+	window := deps.Security.RateLimitWindow
+	if window <= 0 {
+		window = time.Minute
+	}
+	generalLimiter := newRateLimiter(
+		defaultLimit(deps.Security.RateLimitGeneral, 300),
+		window,
+		deps.Security.TrustProxyHeaders,
+	)
+	authLimiter := newRateLimiter(
+		defaultLimit(deps.Security.RateLimitAuth, 10),
+		window,
+		deps.Security.TrustProxyHeaders,
+	)
+	mutationLimiter := newRateLimiter(
+		defaultLimit(deps.Security.RateLimitMutation, 60),
+		window,
+		deps.Security.TrustProxyHeaders,
+	)
+	publicLimiter := newRateLimiter(
+		defaultLimit(deps.Security.RateLimitPublic, 60),
+		window,
+		deps.Security.TrustProxyHeaders,
+	)
 	router.Route("/api/v1", func(router chi.Router) {
+		router.Use(generalLimiter.middleware)
+		router.Use(csrfOriginGuard(deps.Security.CSRFProtection, deps.WebOrigin))
+		router.Use(rateLimitMutations(mutationLimiter))
 		router.Get("/capabilities", api.capabilities)
 		if deps.Reports != nil {
 			publicReports := reportsHandler{service: deps.Reports}
-			router.With(limiter.middleware).Get(
+			router.With(publicLimiter.middleware).Get(
 				"/public/reports/{token}",
 				publicReports.publicReport,
 			)
@@ -84,8 +132,8 @@ func NewRouter(deps Dependencies) http.Handler {
 			accounts := identityHandler{
 				service: deps.Identity, cookieSecure: deps.SessionCookieSecure,
 			}
-			router.With(limiter.middleware).Post("/auth/register", accounts.register)
-			router.With(limiter.middleware).Post("/auth/login", accounts.login)
+			router.With(authLimiter.middleware).Post("/auth/register", accounts.register)
+			router.With(authLimiter.middleware).Post("/auth/login", accounts.login)
 			router.Post("/auth/logout", accounts.logout)
 			router.Group(func(router chi.Router) {
 				router.Use(accounts.requireAccount)
@@ -99,14 +147,13 @@ func NewRouter(deps Dependencies) http.Handler {
 				mountWorkspaceRoutes(
 					router,
 					api,
-					limiter,
 					accounts.requireRole,
 					deps.Collaboration,
 					deps.Reports,
 				)
 			})
 		} else {
-			mountWorkspaceRoutes(router, api, limiter, nil, nil, nil)
+			mountWorkspaceRoutes(router, api, nil, nil, nil)
 		}
 	})
 
@@ -118,7 +165,6 @@ type roleGuard func(identity.Role) func(http.Handler) http.Handler
 func mountWorkspaceRoutes(
 	router chi.Router,
 	api apiHandler,
-	limiter *rateLimiter,
 	guard roleGuard,
 	collaborationService *collaboration.Service,
 	reportsService *reports.Service,
@@ -133,14 +179,14 @@ func mountWorkspaceRoutes(
 		return append(result, middlewares...)
 	}
 
-	router.With(operator(limiter.middleware)...).Post("/runs", api.createRun)
+	router.With(operator()...).Post("/runs", api.createRun)
 	router.Get("/runs", api.listRuns)
 	router.Get("/runs/{id}", api.getRun)
 	router.With(operator()...).Post("/runs/{id}/cancel", api.cancelRun)
 	router.Get("/runs/{id}/events", api.runEvents)
 	router.Get("/runs/{id}/export", api.exportRun)
 	router.Get("/targets", api.listTargets)
-	router.With(operator(limiter.middleware)...).Post("/targets", api.createTarget)
+	router.With(operator()...).Post("/targets", api.createTarget)
 	router.Get("/targets/{targetID}", api.getTarget)
 	router.With(operator()...).Put("/targets/{targetID}", api.updateTarget)
 	router.With(operator()...).Delete("/targets/{targetID}", api.deleteTarget)
@@ -301,25 +347,21 @@ func requestID(next http.Handler) http.Handler {
 	})
 }
 
-func cors(origin string) func(http.Handler) http.Handler {
+func rateLimitMutations(limiter *rateLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set(
-				"Access-Control-Allow-Headers",
-				"Accept, Authorization, Content-Type, X-Request-ID, X-Workspace-ID",
-			)
-			w.Header().Set(
-				"Access-Control-Allow-Methods",
-				"GET, POST, PUT, PATCH, DELETE, OPTIONS",
-			)
-			w.Header().Set("Access-Control-Allow-Credentials", "true")
-			w.Header().Add("Vary", "Origin")
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
+			if isSafeMethod(r.Method) {
+				next.ServeHTTP(w, r)
 				return
 			}
-			next.ServeHTTP(w, r)
+			limiter.middleware(next).ServeHTTP(w, r)
 		})
 	}
+}
+
+func defaultLimit(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }
