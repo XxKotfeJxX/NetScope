@@ -37,6 +37,7 @@ export interface CheckResult {
 
 export interface DiagnosticRun {
   id: string;
+  workspaceId: string;
   target: string;
   normalizedHost: string;
   normalizedUrl?: string;
@@ -188,6 +189,7 @@ export interface TargetInput {
 
 export interface MonitoredTarget extends TargetInput {
   id: string;
+  workspaceId: string;
   enabled: boolean;
   consecutiveFailures: number;
   status: TargetStatus;
@@ -255,6 +257,33 @@ export interface MonitoringOverview {
   warningTargets: number;
   unavailableTargets: number;
   recentChecks: MonitoringJournalEntry[];
+}
+
+export type WorkspaceRole = "owner" | "admin" | "operator" | "viewer";
+
+export interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  role: WorkspaceRole;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CurrentAccount {
+  user: User;
+  workspaces: Workspace[];
+  activeWorkspace: Workspace;
+  sessionExpiresAt: string;
 }
 
 export interface APIError {

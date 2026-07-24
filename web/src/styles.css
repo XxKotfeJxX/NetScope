@@ -2502,3 +2502,402 @@ p {
     padding-left: 0;
   }
 }
+
+.workspace-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+}
+
+.workspace-identity > span {
+  color: var(--line-strong);
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.workspace-identity select {
+  width: min(190px, 22vw);
+  min-width: 100px;
+  padding: 5px 24px 5px 7px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+}
+
+.workspace-identity select:hover,
+.workspace-identity select:focus {
+  border-bottom-color: var(--accent);
+}
+
+.account-tools {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-self: end;
+  gap: 13px;
+}
+
+.workspace-link {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.account-mark {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: transparent;
+}
+
+.account-mark:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.auth-loading {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.auth-loading p {
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+.auth-shell {
+  display: grid;
+  width: min(1180px, calc(100% - 48px));
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.65fr);
+  align-items: center;
+  gap: clamp(56px, 10vw, 140px);
+  margin: 0 auto;
+  padding: 72px 0;
+}
+
+.auth-intro {
+  max-width: 650px;
+}
+
+.auth-brand {
+  display: inline-block;
+  margin-bottom: 90px;
+}
+
+.auth-intro h1 {
+  max-width: 620px;
+  margin-bottom: 24px;
+  font-size: clamp(48px, 7vw, 76px);
+  font-weight: 500;
+  line-height: 0.98;
+  letter-spacing: -0.055em;
+}
+
+.auth-intro > p:not(.section-label) {
+  max-width: 540px;
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1.7;
+}
+
+.auth-route {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 54px;
+  color: var(--muted);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.auth-route span:first-child {
+  color: var(--accent);
+}
+
+.auth-route i {
+  width: 36px;
+  height: 1px;
+  background: var(--line-strong);
+}
+
+.auth-panel {
+  padding: 30px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.auth-mode {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: -30px -30px 30px;
+  border-bottom: 1px solid var(--line);
+}
+
+.auth-mode button {
+  padding: 15px;
+  color: var(--muted);
+  font-size: 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+}
+
+.auth-mode button.active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.auth-panel h2 {
+  margin-bottom: 28px;
+  font-size: 27px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.auth-panel form {
+  display: grid;
+  gap: 17px;
+}
+
+.auth-panel label,
+.workspace-create label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.auth-panel input,
+.workspace-create input {
+  width: 100%;
+  height: 43px;
+  padding: 0 12px;
+  color: var(--ink);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.auth-panel .primary-button {
+  width: 100%;
+  min-width: 0;
+  height: 45px;
+  margin-top: 4px;
+  border-radius: 4px;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--failed);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.auth-security {
+  margin: 22px 0 0;
+  color: var(--faint);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.workspace-page {
+  max-width: 1120px;
+}
+
+.workspace-role {
+  color: var(--accent);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.context-tabs {
+  display: flex;
+  gap: 28px;
+  margin-top: 38px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.context-tabs a {
+  flex: 0 0 auto;
+  padding: 13px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+  border-bottom: 2px solid transparent;
+}
+
+.context-tabs a:hover,
+.context-tabs a.active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+.workspace-ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.55fr);
+  gap: 64px;
+  padding: 42px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-ledger h2 {
+  font-size: 31px;
+  font-weight: 500;
+}
+
+.workspace-ledger dl {
+  margin: 30px 0 0;
+}
+
+.workspace-ledger dl > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 24px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+
+.workspace-ledger dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.workspace-ledger dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 10px;
+}
+
+.workspace-create {
+  align-self: start;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+
+.workspace-create button {
+  width: 100%;
+  height: 41px;
+  margin-top: 13px;
+  color: var(--accent);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: transparent;
+}
+
+.workspace-create button:hover {
+  border-color: var(--accent);
+}
+
+.workspace-next {
+  max-width: 650px;
+  padding: 42px 0;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.mono-value {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85em;
+}
+
+@media (max-width: 1060px) {
+  .api-state {
+    display: none;
+  }
+
+  .auth-shell {
+    gap: 54px;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-identity select {
+    width: min(180px, 45vw);
+  }
+
+  .workspace-link {
+    display: none;
+  }
+
+  .auth-shell {
+    min-height: auto;
+    grid-template-columns: 1fr;
+    gap: 48px;
+    padding: 34px 0 64px;
+  }
+
+  .auth-brand {
+    margin-bottom: 52px;
+  }
+
+  .auth-route {
+    display: none;
+  }
+
+  .auth-panel {
+    width: 100%;
+    max-width: 520px;
+  }
+
+  .workspace-ledger {
+    grid-template-columns: 1fr;
+    gap: 34px;
+  }
+}
+
+@media (max-width: 520px) {
+  .workspace-identity > span,
+  .account-tools .workspace-link {
+    display: none;
+  }
+
+  .workspace-identity {
+    gap: 5px;
+  }
+
+  .workspace-identity select {
+    width: 42vw;
+    padding-left: 3px;
+  }
+
+  .auth-intro h1 {
+    font-size: 44px;
+  }
+
+  .auth-panel {
+    padding: 22px;
+  }
+
+  .auth-mode {
+    margin: -22px -22px 24px;
+  }
+}
