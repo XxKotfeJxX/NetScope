@@ -31,6 +31,13 @@ services:
       NETWORK_POLICY: local
       ICMP_ENABLED: "true"
       MONITORING_POLL_INTERVAL: 10s
+      NOTIFICATION_TIMEOUT: ${NOTIFICATION_TIMEOUT:-10s}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS_MODE: ${SMTP_TLS_MODE:-starttls}
       LOG_FORMAT: json
     cap_add:
       - NET_RAW
