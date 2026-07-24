@@ -27,6 +27,8 @@ describe("App", () => {
   });
 
   beforeEach(() => {
+    window.localStorage.clear();
+    delete document.documentElement.dataset.theme;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: string | URL | Request) => {
@@ -147,6 +149,73 @@ describe("App", () => {
     expect(
       screen.getByRole("navigation", { name: /main navigation/i }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /skip to main content/i }),
+    ).toHaveAttribute("href", "#main-content");
+  });
+
+  it("opens the keyboard command palette", async () => {
+    renderApp();
+    await screen.findByRole("heading", { name: /run a network diagnostic/i });
+
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+
+    expect(
+      screen.getByRole("dialog", { name: /command palette/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /run diagnostic/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: /create schedule/i }),
+    ).toBeInTheDocument();
+
+    fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
+    expect(
+      screen.queryByRole("dialog", { name: /command palette/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("persists the dark theme preference", async () => {
+    renderApp();
+    const toggle = await screen.findByRole("button", {
+      name: /switch to dark theme/i,
+    });
+
+    fireEvent.click(toggle);
+
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(window.localStorage.getItem("netscope-theme")).toBe("dark");
+    expect(
+      screen.getByRole("button", { name: /switch to light theme/i }),
+    ).toBeInTheDocument();
+  });
+
+  it("opens the schedule form from the command palette", async () => {
+    renderApp();
+    await screen.findByRole("heading", { name: /run a network diagnostic/i });
+    fireEvent.keyDown(window, { key: "k", ctrlKey: true });
+
+    fireEvent.click(screen.getByRole("option", { name: /create schedule/i }));
+
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Targets" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Save a target").closest("details"),
+    ).toHaveAttribute("open");
+  });
+
+  it("exposes a compact navigation toggle", async () => {
+    renderApp();
+    const toggle = await screen.findByRole("button", {
+      name: /open navigation/i,
+    });
+
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveAccessibleName(/close navigation/i);
   });
 
   it("validates an empty target", async () => {
@@ -159,6 +228,21 @@ describe("App", () => {
     expect(
       await screen.findByText(/enter a hostname, url, or ip address/i),
     ).toBeInTheDocument();
+  });
+
+  it("offers one-click onboarding targets", async () => {
+    renderApp();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /inspect your first target/i,
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "example.com" }));
+
+    expect(
+      screen.getByPlaceholderText(/example\.com, https:\/\/api/i),
+    ).toHaveValue("example.com");
   });
 
   it("shows the workspace sign-in when no session exists", async () => {
@@ -224,5 +308,35 @@ describe("App", () => {
     expect(
       screen.getByText(/read-only technical evidence/i),
     ).toBeInTheDocument();
+  });
+
+  it("renders public documentation without an account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({
+            error: {
+              code: "authentication_required",
+              message: "Sign in to continue.",
+            },
+          }),
+        } as Response;
+      }),
+    );
+
+    renderApp("/docs");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /netscope documentation/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /complete openapi 3\.1 contract/i }),
+    ).toHaveAttribute("href", expect.stringContaining("api/openapi.yaml"));
   });
 });

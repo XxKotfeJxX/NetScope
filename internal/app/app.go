@@ -153,6 +153,17 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		Collaboration:       collaborationService,
 		Reports:             reportsService,
 		SessionCookieSecure: cfg.SessionCookieSecure,
+		MetricsEnabled:      cfg.MetricsEnabled,
+		Security: httpapi.SecurityConfig{
+			Production:        cfg.Environment == "production",
+			CSRFProtection:    cfg.CSRFProtection,
+			TrustProxyHeaders: cfg.TrustedProxyHeaders,
+			RateLimitWindow:   cfg.RateLimitWindow,
+			RateLimitGeneral:  cfg.RateLimitGeneral,
+			RateLimitAuth:     cfg.RateLimitAuth,
+			RateLimitMutation: cfg.RateLimitMutation,
+			RateLimitPublic:   cfg.RateLimitPublic,
+		},
 		Checks: map[string]httpapi.Capability{
 			"dns": {Available: true}, "tcp": {Available: true},
 			"http": {Available: true}, "tls": {Available: true},

@@ -1,7 +1,9 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/XxKotfeJxX/netscope/internal/collaboration"
@@ -26,6 +28,21 @@ type apiError struct {
 	Message   string         `json:"message"`
 	Details   map[string]any `json:"details,omitempty"`
 	RequestID string         `json:"requestId"`
+}
+
+type errorLoggerContextKey struct{}
+
+func errorTracking(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := context.WithValue(
+				r.Context(),
+				errorLoggerContextKey{},
+				logger,
+			)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
@@ -143,6 +160,17 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		message = "The public report link is invalid, expired, or revoked."
 	}
 
+	if status >= http.StatusInternalServerError {
+		if logger, ok := r.Context().Value(errorLoggerContextKey{}).(*slog.Logger); ok {
+			logger.Error(
+				"unhandled API error",
+				"request_id", r.Header.Get("X-Request-ID"),
+				"method", r.Method,
+				"path", safeRequestPath(r.URL.Path),
+				"error", err,
+			)
+		}
+	}
 	writeJSON(w, status, errorEnvelope{Error: apiError{
 		Code: code, Message: message, Details: details, RequestID: r.Header.Get("X-Request-ID"),
 	}})

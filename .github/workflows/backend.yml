@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "**/*.go"
+      - "api/**"
       - "go.mod"
       - "go.sum"
       - "Dockerfile"
@@ -33,4 +34,3 @@ jobs:
         run: go test -race ./...
       - name: Build
         run: go build ./cmd/netscope
-

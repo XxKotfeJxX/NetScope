@@ -1,0 +1,88 @@
+name: release-readiness
+
+on:
+  pull_request:
+    paths:
+      - "api/**"
+      - "deploy/**"
+      - "scripts/**"
+      - "Dockerfile"
+      - "compose.production.yml"
+      - ".env.production.example"
+      - "web/Dockerfile"
+      - "web/Caddyfile"
+      - ".github/workflows/release-readiness.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_PROJECT_NAME: netscope-release-ci
+      NETSCOPE_DOMAIN: localhost
+      POSTGRES_PASSWORD: ci-only-password
+      DATABASE_URL: postgres://netscope:ci-only-password@postgres:5432/netscope?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.26.5"
+          cache: true
+      - name: Validate OpenAPI contract
+        run: go test ./api
+      - name: Check operations scripts
+        run: bash -n scripts/backup-postgres.sh scripts/restore-postgres.sh
+      - name: Render production Compose configuration
+        run: docker compose -f compose.production.yml config --quiet
+      - name: Validate production Caddy configuration
+        run: >-
+          docker run --rm
+          -e NETSCOPE_DOMAIN=localhost
+          -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro"
+          caddy:2.10-alpine
+          caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+      - name: Build API image
+        run: docker build --tag netscope-api:ci .
+      - name: Build web image
+        run: docker build --tag netscope-web:ci web
+      - name: Exercise backup and staged restore
+        run: |
+          docker compose -f compose.production.yml up -d --build --wait
+          docker compose -f compose.production.yml exec -T api \
+            getent hosts example.com >/dev/null
+          curl --fail --silent --show-error --insecure \
+            https://localhost/healthz |
+            jq --exit-status '.status == "ok" and .version == "1.0.0"'
+          curl --fail --silent --show-error --insecure \
+            https://localhost/api/v1/capabilities |
+            jq --exit-status '
+              .version == "1.0.0" and
+              .runtime.networkPolicy == "public"
+            '
+          test "$(
+            curl --silent --show-error --insecure \
+              --output /dev/null --write-out '%{http_code}' \
+              https://localhost/readyz
+          )" = "404"
+          test "$(
+            curl --silent --show-error --insecure \
+              --output /dev/null --write-out '%{http_code}' \
+              https://localhost/metrics
+          )" = "404"
+          NETSCOPE_COMPOSE_FILE="$PWD/compose.production.yml" \
+            NETSCOPE_ENV_FILE="$PWD/.missing-ci-env" \
+            bash scripts/backup-postgres.sh "$RUNNER_TEMP/netscope-backups"
+          backup="$(find "$RUNNER_TEMP/netscope-backups" -name '*.dump' -type f -print -quit)"
+          NETSCOPE_COMPOSE_FILE="$PWD/compose.production.yml" \
+            NETSCOPE_ENV_FILE="$PWD/.missing-ci-env" \
+            bash scripts/restore-postgres.sh --confirm "$backup"
+          docker compose -f compose.production.yml exec -T api \
+            wget -qO- http://localhost:8080/readyz
+      - name: Remove release-readiness services
+        if: always()
+        run: docker compose -f compose.production.yml down --volumes
