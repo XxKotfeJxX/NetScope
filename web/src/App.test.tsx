@@ -230,6 +230,21 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers one-click onboarding targets", async () => {
+    renderApp();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /inspect your first target/i,
+      }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "example.com" }));
+
+    expect(
+      screen.getByPlaceholderText(/example\.com, https:\/\/api/i),
+    ).toHaveValue("example.com");
+  });
+
   it("shows the workspace sign-in when no session exists", async () => {
     vi.stubGlobal(
       "fetch",
@@ -293,5 +308,35 @@ describe("App", () => {
     expect(
       screen.getByText(/read-only technical evidence/i),
     ).toBeInTheDocument();
+  });
+
+  it("renders public documentation without an account", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        return {
+          ok: false,
+          status: 401,
+          json: async () => ({
+            error: {
+              code: "authentication_required",
+              message: "Sign in to continue.",
+            },
+          }),
+        } as Response;
+      }),
+    );
+
+    renderApp("/docs");
+
+    expect(
+      screen.getByRole("heading", {
+        level: 1,
+        name: /netscope documentation/i,
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /complete openapi 3\.1 contract/i }),
+    ).toHaveAttribute("href", expect.stringContaining("api/openapi.yaml"));
   });
 });

@@ -12,6 +12,7 @@ import { TargetsPage } from "./pages/TargetsPage";
 import { AuthPage } from "./pages/AuthPage";
 import { WorkspacePage } from "./pages/WorkspacePage";
 import { PublicReportPage } from "./pages/PublicReportPage";
+import { DocsPage } from "./pages/DocsPage";
 
 export function App() {
   const { account, loading } = useAuth();
@@ -21,6 +22,14 @@ export function App() {
     return (
       <Routes>
         <Route path="/shared/:token" element={<PublicReportPage />} />
+      </Routes>
+    );
+  }
+
+  if (location.pathname === "/docs") {
+    return (
+      <Routes>
+        <Route path="/docs" element={<DocsPage />} />
       </Routes>
     );
   }
