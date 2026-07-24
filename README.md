@@ -2,7 +2,7 @@
 
 Technical network diagnostics built with Go and TypeScript.
 
-[API docs](api/openapi.yaml) · [v0.2.0 release notes](docs/releases/v0.2.0.md) ·
+[API docs](api/openapi.yaml) · [v0.3.0 release notes](docs/releases/v0.3.0.md) ·
 [Architecture](#architecture) · [Roadmap](#roadmap)
 
 NetScope accepts one explicit hostname, URL, or IP address and runs focused
@@ -26,6 +26,10 @@ reaches `main` only through a dedicated release pull request.
 - IPv4/IPv6 preference, custom TCP ports, HTTP method, and redirect policy
 - Bounded run workers, per-probe timeout, cancellation, and SSE events
 - Persisted run details, history, JSON/CSV export, exact reruns, and comparison
+- Named monitoring targets with tags, configurable checks, and intervals
+- Scheduled availability, latency, and TLS-expiry history
+- Consecutive-failure thresholds, pause/resume, and maintenance windows
+- Recovery and outage alerts through SSRF-protected webhooks or SMTP email
 - Responsive React 19 + TypeScript diagnostic dashboard
 - Docker Compose for database-only or full-stack development
 - Backend and frontend test, lint, typecheck, race, and build checks
@@ -94,6 +98,12 @@ Public deployments must set `NETWORK_POLICY=public`; this mode blocks private,
 loopback, link-local, multicast, unspecified, and metadata targets. Local mode
 is only suitable for a trusted development machine.
 
+Webhook notifications use the same network policy and secure dialer as
+diagnostic probes. Email notifications are optional: set `SMTP_HOST`,
+`SMTP_FROM`, and, when required, the matching username/password pair. SMTP
+supports `starttls` (default), implicit `tls`, and `none` for trusted local
+development. See `.env.example` for every setting.
+
 ## API documentation
 
 The OpenAPI 3.1 contract is maintained at [`api/openapi.yaml`](api/openapi.yaml)
@@ -123,8 +133,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
 ICMP probes require raw-socket permission and are capability-detected at
 runtime. The supplied Compose stack grants only `CAP_NET_RAW` to the non-root
-API executable. NetScope v0.2.0 has no saved targets, schedules, notifications,
-or authentication yet, so a public deployment still requires an external
+API executable. NetScope v0.3.0 has no application authentication or
+multi-user workspaces yet, so a public deployment still requires an external
 access-control layer.
 
 ## Roadmap
