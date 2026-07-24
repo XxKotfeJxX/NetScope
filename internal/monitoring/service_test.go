@@ -2,9 +2,11 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/google/uuid"
 )
 
@@ -43,6 +45,16 @@ func (availableRuns) Create(
 	return diagnostics.DiagnosticRun{}, nil
 }
 
+func (availableRuns) CreateInWorkspace(
+	context.Context,
+	uuid.UUID,
+	string,
+	[]diagnostics.CheckType,
+	diagnostics.RunOptions,
+) (diagnostics.DiagnosticRun, error) {
+	return diagnostics.DiagnosticRun{}, nil
+}
+
 func (availableRuns) Get(
 	context.Context,
 	uuid.UUID,
@@ -55,7 +67,13 @@ func TestCreateTargetNormalizesDefaultsAndTags(t *testing.T) {
 
 	repository := &memoryRepository{}
 	service := NewService(repository, availableRuns{})
-	created, err := service.CreateTarget(context.Background(), TargetInput{
+	workspaceID := uuid.New()
+	created, err := service.CreateTarget(identity.WithPrincipal(
+		context.Background(),
+		identity.Principal{
+			Workspace: identity.Workspace{ID: workspaceID, Role: identity.RoleOperator},
+		},
+	), TargetInput{
 		Name:    "  Production API  ",
 		Address: "HTTPS://Example.COM/path",
 		Tags:    []string{"Production", " api ", "production"},
@@ -83,13 +101,31 @@ func TestCreateTargetNormalizesDefaultsAndTags(t *testing.T) {
 	if !created.Enabled || created.Status != StatusPending {
 		t.Fatalf("state = enabled %t, status %s", created.Enabled, created.Status)
 	}
+	if created.WorkspaceID != workspaceID {
+		t.Fatalf("workspace = %s, want %s", created.WorkspaceID, workspaceID)
+	}
+	if _, err := service.GetTarget(identity.WithPrincipal(
+		context.Background(),
+		identity.Principal{
+			Workspace: identity.Workspace{
+				ID: uuid.New(), Role: identity.RoleOperator,
+			},
+		},
+	), created.ID); !errors.Is(err, identity.ErrForbidden) {
+		t.Fatalf("GetTarget(other workspace) error = %v", err)
+	}
 }
 
 func TestCreateTargetRejectsUnavailableCheck(t *testing.T) {
 	t.Parallel()
 
 	service := NewService(&memoryRepository{}, availableRuns{})
-	_, err := service.CreateTarget(context.Background(), TargetInput{
+	_, err := service.CreateTarget(identity.WithPrincipal(
+		context.Background(),
+		identity.Principal{
+			Workspace: identity.Workspace{ID: uuid.New(), Role: identity.RoleOperator},
+		},
+	), TargetInput{
 		Name: "Router", Address: "1.1.1.1",
 		Checks: []diagnostics.CheckType{diagnostics.CheckTraceroute},
 	})

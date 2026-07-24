@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NetScope API
-  version: 0.3.0
+  version: 0.4.0
   description: Concurrent network diagnostics and scheduled monitoring API.
   license:
     name: MIT
@@ -15,10 +15,19 @@ tags:
     description: Diagnostic run lifecycle, results, events, and exports.
   - name: Monitoring
     description: Saved targets, schedules, history, maintenance, and notifications.
-security: []
+  - name: Identity
+    description: Account registration, sessions, and current-user context.
+  - name: Workspaces
+    description: Collaborative workspace lifecycle and membership context.
+  - name: Reports
+    description: Team comments and controlled public diagnostic evidence.
+security:
+  - sessionCookie: []
+  - bearerSession: []
 paths:
   /healthz:
     get:
+      security: []
       tags: [System]
       operationId: getHealth
       summary: Check whether the API process is alive
@@ -31,6 +40,7 @@ paths:
                 $ref: "#/components/schemas/Health"
   /readyz:
     get:
+      security: []
       tags: [System]
       operationId: getReadiness
       summary: Check PostgreSQL readiness
@@ -41,6 +51,7 @@ paths:
           description: PostgreSQL is unavailable
   /api/v1/capabilities:
     get:
+      security: []
       tags: [System]
       operationId: getCapabilities
       summary: Get available diagnostic checks and runtime limits
@@ -51,6 +62,486 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Capabilities"
+  /api/v1/auth/register:
+    post:
+      security: []
+      tags: [Identity]
+      operationId: registerAccount
+      summary: Register an account and its first workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegistrationInput"
+      responses:
+        "201":
+          description: Account and session created
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentAccount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          description: Email is already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /api/v1/auth/login:
+    post:
+      security: []
+      tags: [Identity]
+      operationId: loginAccount
+      summary: Create a user session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Authenticated account
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentAccount"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/auth/logout:
+    post:
+      security: []
+      tags: [Identity]
+      operationId: logoutAccount
+      summary: Revoke the current session
+      responses:
+        "204":
+          description: Session revoked
+  /api/v1/me:
+    get:
+      tags: [Identity]
+      operationId: getCurrentAccount
+      summary: Get the current user and workspace context
+      security:
+        - sessionCookie: []
+        - bearerSession: []
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceHeader"
+      responses:
+        "200":
+          description: Current account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentAccount"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/workspaces:
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaces
+      summary: List workspaces for the current user
+      security:
+        - sessionCookie: []
+        - bearerSession: []
+      responses:
+        "200":
+          description: Workspace memberships
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Workspace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Workspaces]
+      operationId: createWorkspace
+      summary: Create a workspace owned by the current user
+      security:
+        - sessionCookie: []
+        - bearerSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+      responses:
+        "201":
+          description: Workspace created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Workspace"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /api/v1/workspace/members:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceMembers
+      summary: List members of the active workspace
+      responses:
+        "200":
+          description: Workspace members ordered by privilege and name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceMember"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Workspaces]
+      operationId: addWorkspaceMember
+      summary: Add a registered account to the active workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddWorkspaceMember"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspace/members/{userID}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [Workspaces]
+      operationId: updateWorkspaceMemberRole
+      summary: Change a workspace member role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/Role"
+      responses:
+        "200":
+          description: Member role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Workspaces]
+      operationId: removeWorkspaceMember
+      summary: Remove an account from the active workspace
+      responses:
+        "204":
+          description: Member removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspace/audit:
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceAudit
+      summary: List immutable workspace control-plane events
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceHeader"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Audit event page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/workspace/api-keys:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceAPIKeys
+      summary: List API key metadata for the active workspace
+      responses:
+        "200":
+          description: API keys, including expired and revoked entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/APIKey"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Workspaces]
+      operationId: createWorkspaceAPIKey
+      summary: Create a scoped API key and reveal its secret once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAPIKey"
+      responses:
+        "201":
+          description: API key created; the token cannot be retrieved again
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedAPIKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+  /api/v1/workspace/api-keys/{keyID}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: keyID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Workspaces]
+      operationId: revokeWorkspaceAPIKey
+      summary: Permanently revoke an active API key
+      responses:
+        "204":
+          description: API key revoked
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Reports]
+      operationId: listRunComments
+      summary: List internal workspace comments for a diagnostic report
+      responses:
+        "200":
+          description: Ordered report comments
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReportComment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Reports]
+      operationId: createRunComment
+      summary: Add an internal comment to a diagnostic report
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [body]
+              properties:
+                body:
+                  type: string
+                  minLength: 1
+                  maxLength: 2000
+      responses:
+        "201":
+          description: Comment recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportComment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/comments/{commentID}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: commentID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Reports]
+      operationId: deleteRunComment
+      summary: Delete an owned comment or moderate it as an Admin
+      responses:
+        "204":
+          description: Comment deleted
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/public-links:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Reports]
+      operationId: listPublicReportLinks
+      summary: List public-link metadata for a diagnostic report
+      responses:
+        "200":
+          description: Public links without recoverable secrets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PublicReportLink"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Reports]
+      operationId: createPublicReportLink
+      summary: Publish a read-only report link and reveal its token once
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresAt:
+                  type: string
+                  format: date-time
+                  description: Defaults to 30 days and cannot exceed 365 days.
+      responses:
+        "201":
+          description: Public report link created
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedPublicReportLink"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/runs/{id}/public-links/{linkID}:
+    parameters:
+      - $ref: "#/components/parameters/RunID"
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: linkID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      tags: [Reports]
+      operationId: revokePublicReportLink
+      summary: Revoke an active public report link
+      responses:
+        "204":
+          description: Link revoked
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/public/reports/{token}:
+    get:
+      security: []
+      tags: [Reports]
+      operationId: getPublicReport
+      summary: Resolve a published read-only diagnostic report
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Published diagnostic evidence
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicReport"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/runs:
     post:
       tags: [Runs]
@@ -425,7 +916,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/MonitoringOverview"
 components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: netscope_session
+    bearerSession:
+      type: http
+      scheme: bearer
+      bearerFormat: ns_session_* or ns_key_*
+      description: Opaque user session or workspace-scoped API key.
   parameters:
+    WorkspaceHeader:
+      in: header
+      name: X-Workspace-ID
+      required: false
+      description: Active workspace. Defaults to the first available membership.
+      schema:
+        type: string
+        format: uuid
     RunID:
       in: path
       name: id
@@ -454,6 +963,21 @@ components:
       schema:
         type: string
         format: uuid
+    Page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      in: query
+      name: pageSize
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
   responses:
     BadRequest:
       description: Invalid target, options, or request body
@@ -467,7 +991,334 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication is required or the session is invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The active workspace role does not permit this action
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The requested change conflicts with workspace state
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
   schemas:
+    Role:
+      type: string
+      enum: [owner, admin, operator, viewer]
+    User:
+      type: object
+      required: [id, email, displayName, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Workspace:
+      type: object
+      required: [id, name, slug, role, createdBy, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        slug:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    WorkspaceMember:
+      type: object
+      required: [userId, email, displayName, role, joinedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        joinedAt:
+          type: string
+          format: date-time
+    AddWorkspaceMember:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/Role"
+    AuditEvent:
+      type: object
+      required:
+        [id, workspaceId, actorUserId, action, resourceType, metadata, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        actorUserId:
+          type: string
+          format: uuid
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+          format: uuid
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    AuditPage:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
+    APIKey:
+      type: object
+      required:
+        [id, workspaceId, name, prefix, role, createdBy, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        prefix:
+          type: string
+        role:
+          type: string
+          enum: [operator, viewer]
+        createdBy:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CreateAPIKey:
+      type: object
+      required: [name, role]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          enum: [operator, viewer]
+        expiresAt:
+          type: string
+          format: date-time
+          description: Defaults to 90 days and cannot exceed 365 days.
+    CreatedAPIKey:
+      allOf:
+        - $ref: "#/components/schemas/APIKey"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              writeOnly: true
+              description: Plaintext credential returned exactly once.
+    ReportComment:
+      type: object
+      required:
+        - id
+        - workspaceId
+        - runId
+        - authorId
+        - authorName
+        - authorEmail
+        - body
+        - createdAt
+        - updatedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+        authorName:
+          type: string
+        authorEmail:
+          type: string
+          format: email
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PublicReportLink:
+      type: object
+      required:
+        [id, workspaceId, runId, tokenPrefix, createdBy, expiresAt, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        runId:
+          type: string
+          format: uuid
+        tokenPrefix:
+          type: string
+        createdBy:
+          type: string
+          format: uuid
+        expiresAt:
+          type: string
+          format: date-time
+        revokedAt:
+          type: string
+          format: date-time
+        lastViewedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    CreatedPublicReportLink:
+      allOf:
+        - $ref: "#/components/schemas/PublicReportLink"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              writeOnly: true
+              description: Secret URL token returned exactly once.
+    PublicReport:
+      type: object
+      required: [workspaceName, publishedAt, expiresAt, run]
+      properties:
+        workspaceName:
+          type: string
+        publishedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        run:
+          $ref: "#/components/schemas/DiagnosticRun"
+    RegistrationInput:
+      type: object
+      required: [email, password, displayName]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 10
+          maxLength: 128
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 80
+        workspaceName:
+          type: string
+          minLength: 1
+          maxLength: 100
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    CurrentAccount:
+      type: object
+      required: [user, workspaces, activeWorkspace, sessionExpiresAt]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        workspaces:
+          type: array
+          items:
+            $ref: "#/components/schemas/Workspace"
+        activeWorkspace:
+          $ref: "#/components/schemas/Workspace"
+        sessionExpiresAt:
+          type: string
+          format: date-time
     Health:
       type: object
       required: [status, service, version]
@@ -911,6 +1762,7 @@ components:
       required:
         [
           id,
+          workspaceId,
           target,
           normalizedHost,
           status,
@@ -921,6 +1773,9 @@ components:
         ]
       properties:
         id:
+          type: string
+          format: uuid
+        workspaceId:
           type: string
           format: uuid
         target:
@@ -1017,6 +1872,7 @@ components:
           required:
             [
               id,
+              workspaceId,
               enabled,
               consecutiveFailures,
               status,
@@ -1026,6 +1882,9 @@ components:
             ]
           properties:
             id:
+              type: string
+              format: uuid
+            workspaceId:
               type: string
               format: uuid
             enabled:

@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/google/uuid"
 )
@@ -66,8 +67,11 @@ func TestCreateAppliesDeepDiagnosticDefaults(t *testing.T) {
 	)
 	service := NewService(repository, manager, target.Policy{}, time.Second, 30*time.Second)
 
+	workspaceID := uuid.New()
 	run, err := service.Create(
-		context.Background(),
+		identity.WithPrincipal(context.Background(), identity.Principal{
+			Workspace: identity.Workspace{ID: workspaceID, Role: identity.RoleOperator},
+		}),
 		"192.0.2.1",
 		[]CheckType{CheckPing},
 		RunOptions{TimeoutMS: 1000},
@@ -77,6 +81,19 @@ func TestCreateAppliesDeepDiagnosticDefaults(t *testing.T) {
 	}
 	if run.Options.PingPackets != 4 || run.Options.MaxHops != 20 {
 		t.Fatalf("deep diagnostic defaults = %+v", run.Options)
+	}
+	if run.WorkspaceID != workspaceID {
+		t.Fatalf("workspace = %s, want %s", run.WorkspaceID, workspaceID)
+	}
+	if _, err := service.Get(identity.WithPrincipal(
+		context.Background(),
+		identity.Principal{
+			Workspace: identity.Workspace{
+				ID: uuid.New(), Role: identity.RoleOperator,
+			},
+		},
+	), run.ID); !errors.Is(err, identity.ErrForbidden) {
+		t.Fatalf("Get(other workspace) error = %v", err)
 	}
 }
 
@@ -96,7 +113,9 @@ func TestCreateRejectsUnavailableCheck(t *testing.T) {
 	service := NewService(repository, manager, target.Policy{}, time.Second, 30*time.Second)
 
 	_, err := service.Create(
-		context.Background(),
+		identity.WithPrincipal(context.Background(), identity.Principal{
+			Workspace: identity.Workspace{ID: uuid.New(), Role: identity.RoleOperator},
+		}),
 		"192.0.2.1",
 		[]CheckType{CheckPing},
 		RunOptions{TimeoutMS: 1000},

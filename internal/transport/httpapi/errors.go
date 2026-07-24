@@ -4,8 +4,11 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
+	"github.com/XxKotfeJxX/netscope/internal/reports"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 )
 
@@ -85,6 +88,59 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusNotFound
 		code = "monitored_target_not_found"
 		message = "The monitored target or nested resource was not found."
+	case errors.Is(err, identity.ErrInvalidInput):
+		status = http.StatusBadRequest
+		code = "invalid_identity_input"
+		message = err.Error()
+	case errors.Is(err, identity.ErrEmailExists):
+		status = http.StatusConflict
+		code = "email_already_registered"
+		message = "An account with this email already exists."
+	case errors.Is(err, identity.ErrUnauthenticated):
+		status = http.StatusUnauthorized
+		code = "authentication_required"
+		message = "Sign in to continue."
+	case errors.Is(err, identity.ErrForbidden):
+		status = http.StatusForbidden
+		code = "workspace_permission_denied"
+		message = "Your workspace role does not allow this action."
+	case errors.Is(err, identity.ErrWorkspaceNotFound):
+		status = http.StatusNotFound
+		code = "workspace_not_found"
+		message = "The workspace was not found."
+	case errors.Is(err, identity.ErrUserNotFound),
+		errors.Is(err, collaboration.ErrMemberMissing):
+		status = http.StatusNotFound
+		code = "workspace_member_not_found"
+		message = "The registered account is not a member of this workspace."
+	case errors.Is(err, collaboration.ErrInvalidInput):
+		status = http.StatusBadRequest
+		code = "invalid_collaboration_input"
+		message = err.Error()
+	case errors.Is(err, collaboration.ErrMemberExists):
+		status = http.StatusConflict
+		code = "workspace_member_exists"
+		message = "That account is already a workspace member."
+	case errors.Is(err, collaboration.ErrLastOwner):
+		status = http.StatusConflict
+		code = "last_workspace_owner"
+		message = "Assign another owner before changing or removing the last owner."
+	case errors.Is(err, collaboration.ErrAPIKeyMissing):
+		status = http.StatusNotFound
+		code = "api_key_not_found"
+		message = "The API key was not found or is already revoked."
+	case errors.Is(err, reports.ErrInvalidInput):
+		status = http.StatusBadRequest
+		code = "invalid_report_collaboration_input"
+		message = err.Error()
+	case errors.Is(err, reports.ErrCommentMissing):
+		status = http.StatusNotFound
+		code = "report_comment_not_found"
+		message = "The report comment was not found."
+	case errors.Is(err, reports.ErrPublicLinkMissing):
+		status = http.StatusNotFound
+		code = "public_report_not_found"
+		message = "The public report link is invalid, expired, or revoked."
 	}
 
 	writeJSON(w, status, errorEnvelope{Error: apiError{

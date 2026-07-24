@@ -38,6 +38,8 @@ type Config struct {
 	SMTPPassword        string
 	SMTPFrom            string
 	SMTPTLSMode         string
+	SessionTTL          time.Duration
+	SessionCookieSecure bool
 	LogLevel            slog.Level
 	LogFormat           string
 }
@@ -60,6 +62,7 @@ func LoadConfig() (Config, error) {
 		SMTPPassword:        os.Getenv("SMTP_PASSWORD"),
 		SMTPFrom:            strings.TrimSpace(os.Getenv("SMTP_FROM")),
 		SMTPTLSMode:         envString("SMTP_TLS_MODE", "starttls"),
+		SessionTTL:          30 * 24 * time.Hour,
 		LogLevel:            slog.LevelInfo,
 	}
 
@@ -103,6 +106,12 @@ func LoadConfig() (Config, error) {
 	); err != nil {
 		return Config{}, err
 	}
+	if cfg.SessionTTL, err = envDuration(
+		"SESSION_TTL",
+		30*24*time.Hour,
+	); err != nil {
+		return Config{}, err
+	}
 	if cfg.SMTPPort, err = envInt("SMTP_PORT", 587, 1, 65535); err != nil {
 		return Config{}, err
 	}
@@ -119,6 +128,12 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 	if cfg.ICMPEnabled, err = envBool("ICMP_ENABLED", true); err != nil {
+		return Config{}, err
+	}
+	if cfg.SessionCookieSecure, err = envBool(
+		"SESSION_COOKIE_SECURE",
+		cfg.Environment != "development",
+	); err != nil {
 		return Config{}, err
 	}
 	if cfg.NetworkPolicy != "local" && cfg.NetworkPolicy != "public" {

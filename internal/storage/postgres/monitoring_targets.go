@@ -32,13 +32,15 @@ func (r *MonitoringRepository) CreateTarget(
 	}
 	_, err = r.pool.Exec(ctx, `
 		INSERT INTO monitored_targets (
-			id, name, address, tags, requested_checks, options, interval_seconds,
+			id, workspace_id, name, address, tags, requested_checks, options,
+			interval_seconds,
 			enabled, failure_threshold, status, next_check_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-	`, target.ID, target.Name, target.Address, target.Tags, checks, options,
-		target.IntervalSeconds, target.Enabled, target.FailureThreshold,
-		target.Status, target.NextCheckAt, target.CreatedAt, target.UpdatedAt)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+	`, target.ID, target.WorkspaceID, target.Name, target.Address,
+		target.Tags, checks, options, target.IntervalSeconds, target.Enabled,
+		target.FailureThreshold, target.Status, target.NextCheckAt,
+		target.CreatedAt, target.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("create monitored target: %w", err)
 	}
@@ -50,7 +52,8 @@ func (r *MonitoringRepository) GetTarget(
 	id uuid.UUID,
 ) (monitoring.Target, error) {
 	target, err := scanMonitoredTarget(r.pool.QueryRow(ctx, `
-		SELECT id, name, address, tags, requested_checks, options,
+		SELECT id, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'),
+			name, address, tags, requested_checks, options,
 			interval_seconds, enabled, failure_threshold, consecutive_failures,
 			status, last_checked_at, last_latency_ms, tls_expires_at,
 			next_check_at, created_at, updated_at
@@ -68,23 +71,29 @@ func (r *MonitoringRepository) GetTarget(
 
 func (r *MonitoringRepository) ListTargets(
 	ctx context.Context,
+	workspaceID uuid.UUID,
 	page int,
 	pageSize int,
 ) (monitoring.Page, error) {
 	page, pageSize = monitoringPagination(page, pageSize)
 	var total int64
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM monitored_targets`).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(
+		ctx,
+		`SELECT COUNT(*) FROM monitored_targets WHERE workspace_id = $1`,
+		workspaceID,
+	).Scan(&total); err != nil {
 		return monitoring.Page{}, fmt.Errorf("count monitored targets: %w", err)
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, name, address, tags, requested_checks, options,
+		SELECT id, workspace_id, name, address, tags, requested_checks, options,
 			interval_seconds, enabled, failure_threshold, consecutive_failures,
 			status, last_checked_at, last_latency_ms, tls_expires_at,
 			next_check_at, created_at, updated_at
 		FROM monitored_targets
+		WHERE workspace_id = $1
 		ORDER BY name, created_at
-		LIMIT $1 OFFSET $2
-	`, pageSize, (page-1)*pageSize)
+		LIMIT $2 OFFSET $3
+	`, workspaceID, pageSize, (page-1)*pageSize)
 	if err != nil {
 		return monitoring.Page{}, fmt.Errorf("list monitored targets: %w", err)
 	}
@@ -356,6 +365,7 @@ func (r *MonitoringRepository) ClaimDueTargets(
 		) AS active_window
 		WHERE target.id = active_window.target_id
 			AND target.enabled = TRUE
+			AND target.workspace_id IS NOT NULL
 			AND target.next_check_at <= NOW()
 	`); err != nil {
 		return nil, fmt.Errorf("mark targets in maintenance: %w", err)
@@ -366,6 +376,7 @@ func (r *MonitoringRepository) ClaimDueTargets(
 			SELECT target.id
 			FROM monitored_targets AS target
 			WHERE target.enabled = TRUE
+				AND target.workspace_id IS NOT NULL
 				AND target.next_check_at <= NOW()
 				AND NOT EXISTS (
 					SELECT 1 FROM monitoring_checks AS check_run
@@ -388,7 +399,8 @@ func (r *MonitoringRepository) ClaimDueTargets(
 			updated_at = NOW()
 		FROM due
 		WHERE target.id = due.id
-		RETURNING target.id, target.name, target.address, target.tags,
+		RETURNING target.id, target.workspace_id, target.name, target.address,
+			target.tags,
 			target.requested_checks, target.options, target.interval_seconds,
 			target.enabled, target.failure_threshold, target.consecutive_failures,
 			target.status, target.last_checked_at, target.last_latency_ms,
@@ -473,7 +485,8 @@ func (r *MonitoringRepository) CompleteCheck(
 	defer func() { _ = transaction.Rollback(ctx) }()
 
 	previous, err := scanMonitoredTarget(transaction.QueryRow(ctx, `
-		SELECT id, name, address, tags, requested_checks, options,
+		SELECT id, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'),
+			name, address, tags, requested_checks, options,
 			interval_seconds, enabled, failure_threshold, consecutive_failures,
 			status, last_checked_at, last_latency_ms, tls_expires_at,
 			next_check_at, created_at, updated_at
@@ -542,7 +555,8 @@ func (r *MonitoringRepository) RecordDispatchFailure(
 	}
 	defer func() { _ = transaction.Rollback(ctx) }()
 	previous, err := scanMonitoredTarget(transaction.QueryRow(ctx, `
-		SELECT id, name, address, tags, requested_checks, options,
+		SELECT id, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'),
+			name, address, tags, requested_checks, options,
 			interval_seconds, enabled, failure_threshold, consecutive_failures,
 			status, last_checked_at, last_latency_ms, tls_expires_at,
 			next_check_at, created_at, updated_at
@@ -582,6 +596,7 @@ func (r *MonitoringRepository) RecordDispatchFailure(
 
 func (r *MonitoringRepository) Overview(
 	ctx context.Context,
+	workspaceID uuid.UUID,
 	limit int,
 ) (monitoring.Overview, error) {
 	if limit < 1 || limit > 100 {
@@ -594,7 +609,8 @@ func (r *MonitoringRepository) Overview(
 			COUNT(*) FILTER (WHERE enabled = TRUE AND status = 'warning'),
 			COUNT(*) FILTER (WHERE enabled = TRUE AND status = 'unavailable')
 		FROM monitored_targets
-	`).Scan(
+		WHERE workspace_id = $1
+	`, workspaceID).Scan(
 		&overview.ActiveTargets,
 		&overview.WarningTargets,
 		&overview.UnavailableTargets,
@@ -608,9 +624,10 @@ func (r *MonitoringRepository) Overview(
 			check_run.created_at, target.name, target.address
 		FROM monitoring_checks AS check_run
 		JOIN monitored_targets AS target ON target.id = check_run.target_id
+		WHERE target.workspace_id = $1
 		ORDER BY COALESCE(check_run.checked_at, check_run.created_at) DESC
-		LIMIT $1
-	`, limit)
+		LIMIT $2
+	`, workspaceID, limit)
 	if err != nil {
 		return monitoring.Overview{}, fmt.Errorf("list monitoring journal: %w", err)
 	}
@@ -643,7 +660,8 @@ func scanMonitoredTarget(scanner rowScanner) (monitoring.Target, error) {
 	var checks []string
 	var options []byte
 	err := scanner.Scan(
-		&target.ID, &target.Name, &target.Address, &target.Tags, &checks, &options,
+		&target.ID, &target.WorkspaceID, &target.Name, &target.Address,
+		&target.Tags, &checks, &options,
 		&target.IntervalSeconds, &target.Enabled, &target.FailureThreshold,
 		&target.ConsecutiveFailures, &target.Status, &target.LastCheckedAt,
 		&target.LastLatencyMS, &target.TLSExpiresAt, &target.NextCheckAt,

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/google/uuid"
 )
@@ -40,6 +41,7 @@ func (r *apiMonitoringRepository) GetTarget(
 
 func (r *apiMonitoringRepository) ListTargets(
 	context.Context,
+	uuid.UUID,
 	int,
 	int,
 ) (monitoring.Page, error) {
@@ -61,6 +63,16 @@ func (apiRunService) Supports(diagnostics.CheckType) bool {
 
 func (apiRunService) Create(
 	context.Context,
+	string,
+	[]diagnostics.CheckType,
+	diagnostics.RunOptions,
+) (diagnostics.DiagnosticRun, error) {
+	return diagnostics.DiagnosticRun{}, nil
+}
+
+func (apiRunService) CreateInWorkspace(
+	context.Context,
+	uuid.UUID,
 	string,
 	[]diagnostics.CheckType,
 	diagnostics.RunOptions,
@@ -97,6 +109,15 @@ func TestMonitoringTargetLifecycleAPI(t *testing.T) {
 			"maxRedirects":5,"ipVersion":"auto","pingPackets":4,"maxHops":20}
 	}`
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/targets", strings.NewReader(body))
+	workspaceID := uuid.New()
+	request = request.WithContext(identity.WithPrincipal(
+		request.Context(),
+		identity.Principal{
+			Workspace: identity.Workspace{
+				ID: workspaceID, Role: identity.RoleOperator,
+			},
+		},
+	))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -109,6 +130,14 @@ func TestMonitoringTargetLifecycleAPI(t *testing.T) {
 	}
 
 	request = httptest.NewRequest(http.MethodGet, "/api/v1/targets", nil)
+	request = request.WithContext(identity.WithPrincipal(
+		request.Context(),
+		identity.Principal{
+			Workspace: identity.Workspace{
+				ID: workspaceID, Role: identity.RoleOperator,
+			},
+		},
+	))
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, request)
 	if response.Code != http.StatusOK ||

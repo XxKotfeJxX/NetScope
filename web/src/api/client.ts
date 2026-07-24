@@ -1,17 +1,28 @@
 import type {
   APIError,
+  AuditPage,
   Capabilities,
   CheckType,
+  CreatedWorkspaceAPIKey,
+  CreatedPublicReportLink,
+  CurrentAccount,
   DiagnosticRun,
   MaintenanceWindow,
   MonitoredTarget,
   MonitoringCheckPage,
   MonitoringOverview,
   NotificationChannel,
+  PublicReport,
+  PublicReportLink,
+  ReportComment,
   RunOptions,
   RunPage,
   TargetInput,
   TargetPage,
+  Workspace,
+  WorkspaceAPIKey,
+  WorkspaceMember,
+  WorkspaceRole,
 } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_URL ?? "";
@@ -29,10 +40,13 @@ export class NetScopeAPIError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const workspaceID = window.localStorage.getItem("netscope.workspace");
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
+    credentials: "include",
     headers: {
       Accept: "application/json",
+      ...(workspaceID ? { "X-Workspace-ID": workspaceID } : {}),
       ...(init?.body ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
@@ -54,6 +68,77 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   capabilities: () => request<Capabilities>("/api/v1/capabilities"),
+  register: (payload: {
+    email: string;
+    password: string;
+    displayName: string;
+    workspaceName: string;
+  }) =>
+    request<CurrentAccount>("/api/v1/auth/register", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  login: (payload: { email: string; password: string }) =>
+    request<CurrentAccount>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  logout: () =>
+    request<void>("/api/v1/auth/logout", {
+      method: "POST",
+    }),
+  currentAccount: async () => {
+    try {
+      return await request<CurrentAccount>("/api/v1/me");
+    } catch (error) {
+      if (
+        error instanceof NetScopeAPIError &&
+        error.code === "workspace_not_found"
+      ) {
+        window.localStorage.removeItem("netscope.workspace");
+        return request<CurrentAccount>("/api/v1/me");
+      }
+      throw error;
+    }
+  },
+  createWorkspace: (name: string) =>
+    request<Workspace>("/api/v1/workspaces", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  listWorkspaceMembers: () =>
+    request<WorkspaceMember[]>("/api/v1/workspace/members"),
+  addWorkspaceMember: (email: string, role: WorkspaceRole) =>
+    request<WorkspaceMember>("/api/v1/workspace/members", {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+  updateWorkspaceMember: (userID: string, role: WorkspaceRole) =>
+    request<WorkspaceMember>(`/api/v1/workspace/members/${userID}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    }),
+  removeWorkspaceMember: (userID: string) =>
+    request<void>(`/api/v1/workspace/members/${userID}`, {
+      method: "DELETE",
+    }),
+  workspaceAudit: () =>
+    request<AuditPage>("/api/v1/workspace/audit?page=1&pageSize=20"),
+  listWorkspaceAPIKeys: () =>
+    request<WorkspaceAPIKey[]>("/api/v1/workspace/api-keys"),
+  createWorkspaceAPIKey: (payload: {
+    name: string;
+    role: "operator" | "viewer";
+    expiresAt: string;
+  }) =>
+    request<CreatedWorkspaceAPIKey>("/api/v1/workspace/api-keys", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  revokeWorkspaceAPIKey: (keyID: string) =>
+    request<void>(`/api/v1/workspace/api-keys/${keyID}`, {
+      method: "DELETE",
+    }),
 
   createRun: (payload: {
     target: string;
@@ -66,6 +151,32 @@ export const api = {
     }),
 
   getRun: (id: string) => request<DiagnosticRun>(`/api/v1/runs/${id}`),
+  runComments: (id: string) =>
+    request<ReportComment[]>(`/api/v1/runs/${id}/comments`),
+  createRunComment: (id: string, body: string) =>
+    request<ReportComment>(`/api/v1/runs/${id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  deleteRunComment: (runID: string, commentID: string) =>
+    request<void>(`/api/v1/runs/${runID}/comments/${commentID}`, {
+      method: "DELETE",
+    }),
+  publicReportLinks: (id: string) =>
+    request<PublicReportLink[]>(`/api/v1/runs/${id}/public-links`),
+  createPublicReportLink: (id: string, expiresAt?: string) =>
+    request<CreatedPublicReportLink>(`/api/v1/runs/${id}/public-links`, {
+      method: "POST",
+      body: JSON.stringify(expiresAt ? { expiresAt } : {}),
+    }),
+  revokePublicReportLink: (runID: string, linkID: string) =>
+    request<void>(`/api/v1/runs/${runID}/public-links/${linkID}`, {
+      method: "DELETE",
+    }),
+  publicReport: (token: string) =>
+    request<PublicReport>(
+      `/api/v1/public/reports/${encodeURIComponent(token)}`,
+    ),
 
   listRuns: (page = 1, pageSize = 20, status = "") => {
     const query = new URLSearchParams({
@@ -79,9 +190,16 @@ export const api = {
   cancelRun: (id: string) =>
     request<void>(`/api/v1/runs/${id}/cancel`, { method: "POST" }),
 
-  eventURL: (id: string) => `${API_BASE}/api/v1/runs/${id}/events`,
-  exportURL: (id: string, format: "json" | "csv" = "json") =>
-    `${API_BASE}/api/v1/runs/${id}/export?format=${format}`,
+  eventURL: (id: string) => {
+    const query = workspaceQuery();
+    return `${API_BASE}/api/v1/runs/${id}/events${query ? `?${query}` : ""}`;
+  },
+  exportURL: (id: string, format: "json" | "csv" = "json") => {
+    const query = new URLSearchParams({ format });
+    const workspaceID = window.localStorage.getItem("netscope.workspace");
+    if (workspaceID) query.set("workspaceId", workspaceID);
+    return `${API_BASE}/api/v1/runs/${id}/export?${query}`;
+  },
 
   listTargets: () => request<TargetPage>("/api/v1/targets?page=1&pageSize=100"),
   createTarget: (payload: TargetInput) =>
@@ -136,3 +254,9 @@ export const api = {
   monitoringOverview: () =>
     request<MonitoringOverview>("/api/v1/monitoring?limit=100"),
 };
+
+function workspaceQuery() {
+  const workspaceID = window.localStorage.getItem("netscope.workspace");
+  if (!workspaceID) return "";
+  return new URLSearchParams({ workspaceId: workspaceID }).toString();
+}

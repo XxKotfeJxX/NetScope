@@ -37,6 +37,7 @@ export interface CheckResult {
 
 export interface DiagnosticRun {
   id: string;
+  workspaceId: string;
   target: string;
   normalizedHost: string;
   normalizedUrl?: string;
@@ -188,6 +189,7 @@ export interface TargetInput {
 
 export interface MonitoredTarget extends TargetInput {
   id: string;
+  workspaceId: string;
   enabled: boolean;
   consecutiveFailures: number;
   status: TargetStatus;
@@ -255,6 +257,112 @@ export interface MonitoringOverview {
   warningTargets: number;
   unavailableTargets: number;
   recentChecks: MonitoringJournalEntry[];
+}
+
+export type WorkspaceRole = "owner" | "admin" | "operator" | "viewer";
+
+export interface User {
+  id: string;
+  email: string;
+  displayName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  role: WorkspaceRole;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CurrentAccount {
+  user: User;
+  workspaces: Workspace[];
+  activeWorkspace: Workspace;
+  sessionExpiresAt: string;
+}
+
+export interface WorkspaceMember {
+  userId: string;
+  email: string;
+  displayName: string;
+  role: WorkspaceRole;
+  joinedAt: string;
+}
+
+export interface AuditEvent {
+  id: string;
+  workspaceId: string;
+  actorUserId: string;
+  action: string;
+  resourceType: string;
+  resourceId?: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AuditPage {
+  items: AuditEvent[];
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+export interface WorkspaceAPIKey {
+  id: string;
+  workspaceId: string;
+  name: string;
+  prefix: string;
+  role: "operator" | "viewer";
+  createdBy: string;
+  expiresAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+export interface CreatedWorkspaceAPIKey extends WorkspaceAPIKey {
+  token: string;
+}
+
+export interface ReportComment {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicReportLink {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  tokenPrefix: string;
+  createdBy: string;
+  expiresAt: string;
+  revokedAt?: string;
+  lastViewedAt?: string;
+  createdAt: string;
+}
+
+export interface CreatedPublicReportLink extends PublicReportLink {
+  token: string;
+}
+
+export interface PublicReport {
+  workspaceName: string;
+  publishedAt: string;
+  expiresAt: string;
+  run: DiagnosticRun;
 }
 
 export interface APIError {

@@ -8,25 +8,33 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
+	"github.com/XxKotfeJxX/netscope/internal/reports"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Dependencies struct {
-	Logger     *slog.Logger
-	Pool       *pgxpool.Pool
-	Version    string
-	WebOrigin  string
-	Runs       *diagnostics.Service
-	Events     diagnostics.EventPublisher
-	Runtime    RuntimeInfo
-	Checks     map[string]Capability
-	Monitoring *monitoring.Service
+	Logger              *slog.Logger
+	Pool                *pgxpool.Pool
+	Version             string
+	WebOrigin           string
+	Runs                *diagnostics.Service
+	Events              diagnostics.EventPublisher
+	Runtime             RuntimeInfo
+	Checks              map[string]Capability
+	Monitoring          *monitoring.Service
+	Identity            *identity.Service
+	Collaboration       *collaboration.Service
+	Reports             *reports.Service
+	SessionCookieSecure bool
 }
 
 type Capability struct {
@@ -65,36 +73,155 @@ func NewRouter(deps Dependencies) http.Handler {
 	limiter := newRateLimiter(10, time.Minute)
 	router.Route("/api/v1", func(router chi.Router) {
 		router.Get("/capabilities", api.capabilities)
-		router.With(limiter.middleware).Post("/runs", api.createRun)
-		router.Get("/runs", api.listRuns)
-		router.Get("/runs/{id}", api.getRun)
-		router.Post("/runs/{id}/cancel", api.cancelRun)
-		router.Get("/runs/{id}/events", api.runEvents)
-		router.Get("/runs/{id}/export", api.exportRun)
-		router.Get("/targets", api.listTargets)
-		router.With(limiter.middleware).Post("/targets", api.createTarget)
-		router.Get("/targets/{targetID}", api.getTarget)
-		router.Put("/targets/{targetID}", api.updateTarget)
-		router.Delete("/targets/{targetID}", api.deleteTarget)
-		router.Post("/targets/{targetID}/pause", api.pauseTarget)
-		router.Post("/targets/{targetID}/resume", api.resumeTarget)
-		router.Get("/targets/{targetID}/checks", api.listTargetChecks)
-		router.Get("/targets/{targetID}/maintenance", api.listMaintenanceWindows)
-		router.Post("/targets/{targetID}/maintenance", api.createMaintenanceWindow)
-		router.Delete(
-			"/targets/{targetID}/maintenance/{windowID}",
-			api.deleteMaintenanceWindow,
-		)
-		router.Get("/targets/{targetID}/notifications", api.listNotificationChannels)
-		router.Post("/targets/{targetID}/notifications", api.createNotificationChannel)
-		router.Delete(
-			"/targets/{targetID}/notifications/{channelID}",
-			api.deleteNotificationChannel,
-		)
-		router.Get("/monitoring", api.monitoringOverview)
+		if deps.Reports != nil {
+			publicReports := reportsHandler{service: deps.Reports}
+			router.With(limiter.middleware).Get(
+				"/public/reports/{token}",
+				publicReports.publicReport,
+			)
+		}
+		if deps.Identity != nil {
+			accounts := identityHandler{
+				service: deps.Identity, cookieSecure: deps.SessionCookieSecure,
+			}
+			router.With(limiter.middleware).Post("/auth/register", accounts.register)
+			router.With(limiter.middleware).Post("/auth/login", accounts.login)
+			router.Post("/auth/logout", accounts.logout)
+			router.Group(func(router chi.Router) {
+				router.Use(accounts.requireAccount)
+				router.Get("/me", accounts.me)
+				router.Get("/workspaces", accounts.listWorkspaces)
+				router.Post("/workspaces", accounts.createWorkspace)
+			})
+			router.Group(func(router chi.Router) {
+				router.Use(accounts.requireAccount)
+				router.Use(accounts.requireWorkspace)
+				mountWorkspaceRoutes(
+					router,
+					api,
+					limiter,
+					accounts.requireRole,
+					deps.Collaboration,
+					deps.Reports,
+				)
+			})
+		} else {
+			mountWorkspaceRoutes(router, api, limiter, nil, nil, nil)
+		}
 	})
 
 	return router
+}
+
+type roleGuard func(identity.Role) func(http.Handler) http.Handler
+
+func mountWorkspaceRoutes(
+	router chi.Router,
+	api apiHandler,
+	limiter *rateLimiter,
+	guard roleGuard,
+	collaborationService *collaboration.Service,
+	reportsService *reports.Service,
+) {
+	operator := func(middlewares ...func(http.Handler) http.Handler) []func(
+		http.Handler,
+	) http.Handler {
+		result := make([]func(http.Handler) http.Handler, 0, len(middlewares)+1)
+		if guard != nil {
+			result = append(result, guard(identity.RoleOperator))
+		}
+		return append(result, middlewares...)
+	}
+
+	router.With(operator(limiter.middleware)...).Post("/runs", api.createRun)
+	router.Get("/runs", api.listRuns)
+	router.Get("/runs/{id}", api.getRun)
+	router.With(operator()...).Post("/runs/{id}/cancel", api.cancelRun)
+	router.Get("/runs/{id}/events", api.runEvents)
+	router.Get("/runs/{id}/export", api.exportRun)
+	router.Get("/targets", api.listTargets)
+	router.With(operator(limiter.middleware)...).Post("/targets", api.createTarget)
+	router.Get("/targets/{targetID}", api.getTarget)
+	router.With(operator()...).Put("/targets/{targetID}", api.updateTarget)
+	router.With(operator()...).Delete("/targets/{targetID}", api.deleteTarget)
+	router.With(operator()...).Post("/targets/{targetID}/pause", api.pauseTarget)
+	router.With(operator()...).Post("/targets/{targetID}/resume", api.resumeTarget)
+	router.Get("/targets/{targetID}/checks", api.listTargetChecks)
+	router.Get("/targets/{targetID}/maintenance", api.listMaintenanceWindows)
+	router.With(operator()...).Post(
+		"/targets/{targetID}/maintenance",
+		api.createMaintenanceWindow,
+	)
+	router.With(operator()...).Delete(
+		"/targets/{targetID}/maintenance/{windowID}",
+		api.deleteMaintenanceWindow,
+	)
+	router.Get("/targets/{targetID}/notifications", api.listNotificationChannels)
+	router.With(operator()...).Post(
+		"/targets/{targetID}/notifications",
+		api.createNotificationChannel,
+	)
+	router.With(operator()...).Delete(
+		"/targets/{targetID}/notifications/{channelID}",
+		api.deleteNotificationChannel,
+	)
+	router.Get("/monitoring", api.monitoringOverview)
+	if collaborationService != nil {
+		collaborationAPI := collaborationHandler{service: collaborationService}
+		router.With(guard(identity.RoleAdmin)).Get(
+			"/workspace/members",
+			collaborationAPI.listMembers,
+		)
+		router.With(guard(identity.RoleAdmin)).Post(
+			"/workspace/members",
+			collaborationAPI.addMember,
+		)
+		router.With(guard(identity.RoleAdmin)).Patch(
+			"/workspace/members/{userID}",
+			collaborationAPI.updateMember,
+		)
+		router.With(guard(identity.RoleAdmin)).Delete(
+			"/workspace/members/{userID}",
+			collaborationAPI.removeMember,
+		)
+		router.With(guard(identity.RoleAdmin)).Get(
+			"/workspace/audit",
+			collaborationAPI.listAudit,
+		)
+		router.With(guard(identity.RoleAdmin)).Get(
+			"/workspace/api-keys",
+			collaborationAPI.listAPIKeys,
+		)
+		router.With(guard(identity.RoleAdmin)).Post(
+			"/workspace/api-keys",
+			collaborationAPI.createAPIKey,
+		)
+		router.With(guard(identity.RoleAdmin)).Delete(
+			"/workspace/api-keys/{keyID}",
+			collaborationAPI.revokeAPIKey,
+		)
+	}
+	if reportsService != nil {
+		reportAPI := reportsHandler{service: reportsService}
+		router.Get("/runs/{id}/comments", reportAPI.listComments)
+		router.With(operator()...).Post(
+			"/runs/{id}/comments",
+			reportAPI.createComment,
+		)
+		router.With(operator()...).Delete(
+			"/runs/{id}/comments/{commentID}",
+			reportAPI.deleteComment,
+		)
+		router.Get("/runs/{id}/public-links", reportAPI.listPublicLinks)
+		router.With(operator()...).Post(
+			"/runs/{id}/public-links",
+			reportAPI.createPublicLink,
+		)
+		router.With(operator()...).Delete(
+			"/runs/{id}/public-links/{linkID}",
+			reportAPI.revokePublicLink,
+		)
+	}
 }
 
 func (h healthHandler) live(w http.ResponseWriter, _ *http.Request) {
@@ -146,12 +273,19 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			logger.Info("request completed",
 				"request_id", r.Header.Get("X-Request-ID"),
 				"method", r.Method,
-				"path", r.URL.Path,
+				"path", safeRequestPath(r.URL.Path),
 				"status", recorder.status,
 				"duration_ms", time.Since(started).Milliseconds(),
 			)
 		})
 	}
+}
+
+func safeRequestPath(path string) string {
+	if strings.HasPrefix(path, "/api/v1/public/reports/") {
+		return "/api/v1/public/reports/[redacted]"
+	}
+	return path
 }
 
 func requestID(next http.Handler) http.Handler {
@@ -171,8 +305,15 @@ func cors(origin string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, X-Request-ID")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set(
+				"Access-Control-Allow-Headers",
+				"Accept, Authorization, Content-Type, X-Request-ID, X-Workspace-ID",
+			)
+			w.Header().Set(
+				"Access-Control-Allow-Methods",
+				"GET, POST, PUT, PATCH, DELETE, OPTIONS",
+			)
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
 			w.Header().Add("Vary", "Origin")
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)

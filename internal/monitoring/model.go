@@ -20,6 +20,7 @@ const (
 
 type Target struct {
 	ID                  uuid.UUID               `json:"id"`
+	WorkspaceID         uuid.UUID               `json:"workspaceId"`
 	Name                string                  `json:"name"`
 	Address             string                  `json:"address"`
 	Tags                []string                `json:"tags"`

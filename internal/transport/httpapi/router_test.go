@@ -9,7 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/target"
+	"github.com/google/uuid"
 )
 
 func TestHealthz(t *testing.T) {
@@ -57,6 +59,32 @@ func TestAPIErrorDoesNotExposeInternalDetails(t *testing.T) {
 	}
 }
 
+func TestWorkspaceRoleGuardRejectsViewerWrites(t *testing.T) {
+	t.Parallel()
+
+	guard := identityHandler{}.requireRole(identity.RoleOperator)
+	handler := guard(http.HandlerFunc(func(
+		writer http.ResponseWriter,
+		_ *http.Request,
+	) {
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/targets", nil)
+	request = request.WithContext(identity.WithPrincipal(
+		request.Context(),
+		identity.Principal{
+			Workspace: identity.Workspace{
+				ID: uuid.New(), Role: identity.RoleViewer,
+			},
+		},
+	))
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+}
+
 func TestCapabilitiesExposeRuntimeProbeAvailability(t *testing.T) {
 	t.Parallel()
 
@@ -89,5 +117,21 @@ func TestCapabilitiesExposeRuntimeProbeAvailability(t *testing.T) {
 	}
 	if payload.Checks["ping"].Reason != "raw_icmp_unavailable" {
 		t.Fatalf("ping reason = %q", payload.Checks["ping"].Reason)
+	}
+}
+
+func TestSafeRequestPathRedactsPublicReportToken(t *testing.T) {
+	t.Parallel()
+
+	token := "ns_share_secret-that-must-never-reach-logs"
+	path := safeRequestPath("/api/v1/public/reports/" + token)
+	if path != "/api/v1/public/reports/[redacted]" {
+		t.Fatalf("safeRequestPath() = %q", path)
+	}
+	if strings.Contains(path, token) {
+		t.Fatal("safeRequestPath() retained the public report token")
+	}
+	if other := safeRequestPath("/api/v1/runs/123"); other != "/api/v1/runs/123" {
+		t.Fatalf("safeRequestPath(ordinary) = %q", other)
 	}
 }

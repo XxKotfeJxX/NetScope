@@ -35,15 +35,18 @@ func TestMonitoringRepositoryLifecycle(t *testing.T) {
 	defer pool.Close()
 	if _, err := pool.Exec(ctx, `
 		TRUNCATE notification_channels, maintenance_windows, monitoring_checks,
-			monitored_targets, check_results, diagnostic_runs
+			monitored_targets, check_results, diagnostic_runs,
+			user_sessions, workspace_members, workspaces, users CASCADE
 	`); err != nil {
 		t.Fatalf("truncate test tables: %v", err)
 	}
+	workspaceID := createIntegrationWorkspace(t, ctx, pool)
 
 	repository := NewMonitoringRepository(pool)
 	now := time.Now().UTC().Truncate(time.Microsecond)
 	target := monitoring.Target{
-		ID: uuid.New(), Name: "Production", Address: "example.com",
+		ID: uuid.New(), WorkspaceID: workspaceID,
+		Name: "Production", Address: "example.com",
 		Tags: []string{"production"},
 		Checks: []diagnostics.CheckType{
 			diagnostics.CheckDNS, diagnostics.CheckHTTP,
@@ -66,7 +69,7 @@ func TestMonitoringRepositoryLifecycle(t *testing.T) {
 	if stored.Name != target.Name || len(stored.Checks) != 2 {
 		t.Fatalf("stored target = %+v", stored)
 	}
-	page, err := repository.ListTargets(ctx, 1, 20)
+	page, err := repository.ListTargets(ctx, workspaceID, 1, 20)
 	if err != nil || page.TotalItems != 1 {
 		t.Fatalf("ListTargets() = %+v, %v", page, err)
 	}
@@ -126,7 +129,8 @@ func TestMonitoringRepositoryLifecycle(t *testing.T) {
 	runID := uuid.New()
 	runRepository := NewRunRepository(pool)
 	if err := runRepository.Create(ctx, diagnostics.DiagnosticRun{
-		ID: runID, TargetInput: target.Address, NormalizedHost: target.Address,
+		ID: runID, WorkspaceID: workspaceID,
+		TargetInput: target.Address, NormalizedHost: target.Address,
 		Status: diagnostics.RunQueued, RequestedChecks: target.Checks,
 		Options: target.Options, CreatedAt: now,
 	}); err != nil {

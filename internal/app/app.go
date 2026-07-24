@@ -8,7 +8,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
+	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
 	"github.com/XxKotfeJxX/netscope/internal/network"
 	dnsprobe "github.com/XxKotfeJxX/netscope/internal/probe/dns"
@@ -17,6 +19,7 @@ import (
 	tcpProbe "github.com/XxKotfeJxX/netscope/internal/probe/tcp"
 	tlsProbe "github.com/XxKotfeJxX/netscope/internal/probe/tlscheck"
 	traceProbe "github.com/XxKotfeJxX/netscope/internal/probe/traceroute"
+	"github.com/XxKotfeJxX/netscope/internal/reports"
 	"github.com/XxKotfeJxX/netscope/internal/storage/postgres"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/XxKotfeJxX/netscope/internal/transport/httpapi"
@@ -97,6 +100,19 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 	)
 	monitoringRepository := postgres.NewMonitoringRepository(pool)
 	monitoringService := monitoring.NewService(monitoringRepository, service)
+	identityRepository := postgres.NewIdentityRepository(pool)
+	identityService := identity.NewService(
+		identityRepository,
+		identity.NewPasswordHasher(identity.DefaultPasswordParams()),
+		cfg.SessionTTL,
+	)
+	collaborationService := collaboration.NewService(
+		postgres.NewCollaborationRepository(pool),
+	)
+	reportsService := reports.NewService(
+		postgres.NewReportsRepository(pool),
+		service,
+	)
 	webhookSender := monitoring.NewWebhookSender(
 		secureDialer,
 		cfg.NotificationTimeout,
@@ -126,13 +142,17 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 	scheduler.Start()
 
 	router := httpapi.NewRouter(httpapi.Dependencies{
-		Logger:     logger,
-		Pool:       pool,
-		Version:    cfg.Version,
-		WebOrigin:  cfg.WebOrigin,
-		Runs:       service,
-		Events:     events,
-		Monitoring: monitoringService,
+		Logger:              logger,
+		Pool:                pool,
+		Version:             cfg.Version,
+		WebOrigin:           cfg.WebOrigin,
+		Runs:                service,
+		Events:              events,
+		Monitoring:          monitoringService,
+		Identity:            identityService,
+		Collaboration:       collaborationService,
+		Reports:             reportsService,
+		SessionCookieSecure: cfg.SessionCookieSecure,
 		Checks: map[string]httpapi.Capability{
 			"dns": {Available: true}, "tcp": {Available: true},
 			"http": {Available: true}, "tls": {Available: true},

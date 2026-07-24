@@ -23,7 +23,7 @@ services:
       context: .
     environment:
       APP_ENV: development
-      APP_VERSION: ${APP_VERSION:-0.3.0}
+      APP_VERSION: ${APP_VERSION:-0.4.0}
       HTTP_HOST: 0.0.0.0
       HTTP_PORT: 8080
       WEB_ORIGIN: http://localhost:5173
@@ -38,6 +38,8 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_FROM: ${SMTP_FROM:-}
       SMTP_TLS_MODE: ${SMTP_TLS_MODE:-starttls}
+      SESSION_TTL: ${SESSION_TTL:-720h}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
       LOG_FORMAT: json
     cap_add:
       - NET_RAW
