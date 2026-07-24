@@ -60,6 +60,7 @@ export function DashboardPage() {
       </section>
 
       <RunForm
+        key={searchParams.get("target") ?? "empty-target"}
         capabilities={capabilities.data}
         initialTarget={searchParams.get("target") ?? ""}
         pending={createRun.isPending}
@@ -110,12 +111,16 @@ export function DashboardPage() {
           {recent.data?.items.length === 0 && (
             <div className="empty-state">
               <div className="empty-copy">
-                <p className="section-label">No diagnostics yet</p>
-                <h3>Start with a hostname, URL, or IP address</h3>
-                <p>
-                  NetScope will follow the route from DNS resolution to the
-                  final HTTP response.
-                </p>
+                <p className="section-label">First route</p>
+                <h3>Inspect your first target</h3>
+                <p>Try one of these:</p>
+                <div className="onboarding-targets">
+                  {["example.com", "github.com", "1.1.1.1"].map((target) => (
+                    <Link key={target} to={`/?target=${target}`}>
+                      {target}
+                    </Link>
+                  ))}
+                </div>
               </div>
               <div className="empty-route" aria-hidden="true">
                 target ── DNS ── Ping ── Trace ── TCP ── TLS ── HTTP

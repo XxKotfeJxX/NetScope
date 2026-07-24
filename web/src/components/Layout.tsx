@@ -62,7 +62,7 @@ export function Layout() {
           <NavLink to="/targets">Targets</NavLink>
           <NavLink to="/monitoring">Monitoring</NavLink>
           <NavLink to="/history">History</NavLink>
-          <NavLink to="/settings">Docs</NavLink>
+          <NavLink to="/docs">Docs</NavLink>
         </nav>
 
         <div className="account-tools">
