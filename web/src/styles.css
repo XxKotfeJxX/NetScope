@@ -1639,6 +1639,7 @@ p {
 
 .journal-day h2 {
   margin-bottom: 10px;
+  padding: 0 14px;
   color: var(--muted);
   font-family: "IBM Plex Mono", monospace;
   font-size: 10px;
@@ -1658,7 +1659,8 @@ p {
     100px 75px 110px;
   align-items: center;
   gap: 15px;
-  min-height: 66px;
+  min-height: 72px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line);
 }
 
