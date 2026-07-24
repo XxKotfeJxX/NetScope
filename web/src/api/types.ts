@@ -330,6 +330,41 @@ export interface CreatedWorkspaceAPIKey extends WorkspaceAPIKey {
   token: string;
 }
 
+export interface ReportComment {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  authorId: string;
+  authorName: string;
+  authorEmail: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PublicReportLink {
+  id: string;
+  workspaceId: string;
+  runId: string;
+  tokenPrefix: string;
+  createdBy: string;
+  expiresAt: string;
+  revokedAt?: string;
+  lastViewedAt?: string;
+  createdAt: string;
+}
+
+export interface CreatedPublicReportLink extends PublicReportLink {
+  token: string;
+}
+
+export interface PublicReport {
+  workspaceName: string;
+  publishedAt: string;
+  expiresAt: string;
+  run: DiagnosticRun;
+}
+
 export interface APIError {
   error: {
     code: string;

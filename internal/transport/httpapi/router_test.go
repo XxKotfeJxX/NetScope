@@ -119,3 +119,19 @@ func TestCapabilitiesExposeRuntimeProbeAvailability(t *testing.T) {
 		t.Fatalf("ping reason = %q", payload.Checks["ping"].Reason)
 	}
 }
+
+func TestSafeRequestPathRedactsPublicReportToken(t *testing.T) {
+	t.Parallel()
+
+	token := "ns_share_secret-that-must-never-reach-logs"
+	path := safeRequestPath("/api/v1/public/reports/" + token)
+	if path != "/api/v1/public/reports/[redacted]" {
+		t.Fatalf("safeRequestPath() = %q", path)
+	}
+	if strings.Contains(path, token) {
+		t.Fatal("safeRequestPath() retained the public report token")
+	}
+	if other := safeRequestPath("/api/v1/runs/123"); other != "/api/v1/runs/123" {
+		t.Fatalf("safeRequestPath(ordinary) = %q", other)
+	}
+}

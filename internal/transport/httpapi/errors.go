@@ -8,6 +8,7 @@ import (
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
 	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
+	"github.com/XxKotfeJxX/netscope/internal/reports"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 )
 
@@ -128,6 +129,18 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusNotFound
 		code = "api_key_not_found"
 		message = "The API key was not found or is already revoked."
+	case errors.Is(err, reports.ErrInvalidInput):
+		status = http.StatusBadRequest
+		code = "invalid_report_collaboration_input"
+		message = err.Error()
+	case errors.Is(err, reports.ErrCommentMissing):
+		status = http.StatusNotFound
+		code = "report_comment_not_found"
+		message = "The report comment was not found."
+	case errors.Is(err, reports.ErrPublicLinkMissing):
+		status = http.StatusNotFound
+		code = "public_report_not_found"
+		message = "The public report link is invalid, expired, or revoked."
 	}
 
 	writeJSON(w, status, errorEnvelope{Error: apiError{

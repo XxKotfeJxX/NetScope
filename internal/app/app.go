@@ -19,6 +19,7 @@ import (
 	tcpProbe "github.com/XxKotfeJxX/netscope/internal/probe/tcp"
 	tlsProbe "github.com/XxKotfeJxX/netscope/internal/probe/tlscheck"
 	traceProbe "github.com/XxKotfeJxX/netscope/internal/probe/traceroute"
+	"github.com/XxKotfeJxX/netscope/internal/reports"
 	"github.com/XxKotfeJxX/netscope/internal/storage/postgres"
 	"github.com/XxKotfeJxX/netscope/internal/target"
 	"github.com/XxKotfeJxX/netscope/internal/transport/httpapi"
@@ -108,6 +109,10 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 	collaborationService := collaboration.NewService(
 		postgres.NewCollaborationRepository(pool),
 	)
+	reportsService := reports.NewService(
+		postgres.NewReportsRepository(pool),
+		service,
+	)
 	webhookSender := monitoring.NewWebhookSender(
 		secureDialer,
 		cfg.NotificationTimeout,
@@ -146,6 +151,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		Monitoring:          monitoringService,
 		Identity:            identityService,
 		Collaboration:       collaborationService,
+		Reports:             reportsService,
 		SessionCookieSecure: cfg.SessionCookieSecure,
 		Checks: map[string]httpapi.Capability{
 			"dns": {Available: true}, "tcp": {Available: true},

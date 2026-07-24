@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import { DiagnosticRoute } from "../components/DiagnosticRoute";
 import { DNSResult } from "../components/DNSResult";
 import { HTTPResult } from "../components/HTTPResult";
 import { PingResult } from "../components/PingResult";
+import { ReportCollaboration } from "../components/ReportCollaboration";
 import { StatusBadge } from "../components/StatusBadge";
 import { TCPResult } from "../components/TCPResult";
 import { TLSResult } from "../components/TLSResult";
@@ -19,6 +21,7 @@ function formatTimestamp(value?: string) {
 
 export function RunPage() {
   const { id = "" } = useParams();
+  const { account } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const run = useQuery({
@@ -202,6 +205,13 @@ export function RunPage() {
           </div>
         </div>
       </div>
+      {account && (
+        <ReportCollaboration
+          runID={data.id}
+          role={account.activeWorkspace.role}
+          userID={account.user.id}
+        />
+      )}
     </main>
   );
 }

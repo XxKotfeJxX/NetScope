@@ -8,12 +8,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
 	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
+	"github.com/XxKotfeJxX/netscope/internal/reports"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -31,6 +33,7 @@ type Dependencies struct {
 	Monitoring          *monitoring.Service
 	Identity            *identity.Service
 	Collaboration       *collaboration.Service
+	Reports             *reports.Service
 	SessionCookieSecure bool
 }
 
@@ -70,6 +73,13 @@ func NewRouter(deps Dependencies) http.Handler {
 	limiter := newRateLimiter(10, time.Minute)
 	router.Route("/api/v1", func(router chi.Router) {
 		router.Get("/capabilities", api.capabilities)
+		if deps.Reports != nil {
+			publicReports := reportsHandler{service: deps.Reports}
+			router.With(limiter.middleware).Get(
+				"/public/reports/{token}",
+				publicReports.publicReport,
+			)
+		}
 		if deps.Identity != nil {
 			accounts := identityHandler{
 				service: deps.Identity, cookieSecure: deps.SessionCookieSecure,
@@ -92,10 +102,11 @@ func NewRouter(deps Dependencies) http.Handler {
 					limiter,
 					accounts.requireRole,
 					deps.Collaboration,
+					deps.Reports,
 				)
 			})
 		} else {
-			mountWorkspaceRoutes(router, api, limiter, nil, nil)
+			mountWorkspaceRoutes(router, api, limiter, nil, nil, nil)
 		}
 	})
 
@@ -110,6 +121,7 @@ func mountWorkspaceRoutes(
 	limiter *rateLimiter,
 	guard roleGuard,
 	collaborationService *collaboration.Service,
+	reportsService *reports.Service,
 ) {
 	operator := func(middlewares ...func(http.Handler) http.Handler) []func(
 		http.Handler,
@@ -189,6 +201,27 @@ func mountWorkspaceRoutes(
 			collaborationAPI.revokeAPIKey,
 		)
 	}
+	if reportsService != nil {
+		reportAPI := reportsHandler{service: reportsService}
+		router.Get("/runs/{id}/comments", reportAPI.listComments)
+		router.With(operator()...).Post(
+			"/runs/{id}/comments",
+			reportAPI.createComment,
+		)
+		router.With(operator()...).Delete(
+			"/runs/{id}/comments/{commentID}",
+			reportAPI.deleteComment,
+		)
+		router.Get("/runs/{id}/public-links", reportAPI.listPublicLinks)
+		router.With(operator()...).Post(
+			"/runs/{id}/public-links",
+			reportAPI.createPublicLink,
+		)
+		router.With(operator()...).Delete(
+			"/runs/{id}/public-links/{linkID}",
+			reportAPI.revokePublicLink,
+		)
+	}
 }
 
 func (h healthHandler) live(w http.ResponseWriter, _ *http.Request) {
@@ -240,12 +273,19 @@ func requestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			logger.Info("request completed",
 				"request_id", r.Header.Get("X-Request-ID"),
 				"method", r.Method,
-				"path", r.URL.Path,
+				"path", safeRequestPath(r.URL.Path),
 				"status", recorder.status,
 				"duration_ms", time.Since(started).Milliseconds(),
 			)
 		})
 	}
+}
+
+func safeRequestPath(path string) string {
+	if strings.HasPrefix(path, "/api/v1/public/reports/") {
+		return "/api/v1/public/reports/[redacted]"
+	}
+	return path
 }
 
 func requestID(next http.Handler) http.Handler {
