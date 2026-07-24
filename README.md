@@ -1,24 +1,30 @@
 # NetScope
 
-Concurrent network diagnostics dashboard built with Go and TypeScript.
+Technical network diagnostics built with Go and TypeScript.
 
-[API docs](api/openapi.yaml) · [Architecture](#architecture) · [Roadmap](#roadmap)
+[API docs](api/openapi.yaml) · [v0.1.0 release notes](docs/releases/v0.1.0.md) ·
+[Architecture](#architecture) · [Roadmap](#roadmap)
 
 NetScope accepts one explicit hostname, URL, or IP address and runs focused
 diagnostic checks with bounded concurrency, per-check timeouts, cancellation,
-and live progress. It is a diagnostics dashboard—not a subnet scanner,
+and live progress. It is a focused diagnostic tool—not a subnet scanner,
 vulnerability scanner, packet sniffer, or Nmap replacement.
 
-> Current release: **v0.0.1 bootstrap**. API health, PostgreSQL readiness, the
-> React application shell, containers, and CI are operational. The DNS
-> vertical slice is being developed on `dev`.
+`main` contains deployable releases. Ongoing integration happens in `dev` and
+reaches `main` only through a dedicated release pull request.
 
 ## Features
 
 - Go `net/http` API with chi routing and graceful shutdown
 - PostgreSQL 18.4 connection pooling through pgx
 - Structured JSON logs with request IDs
-- Responsive React 19 + TypeScript dashboard shell
+- DNS A, AAAA, CNAME, MX, NS, TXT, and PTR inspection
+- Explicit TCP connection checks with typed failure classification
+- HTTP redirects, status, content metadata, hashing, and phase timings
+- TLS protocol, cipher, certificate chain, hostname, and expiry validation
+- Bounded run workers, per-probe timeout, cancellation, and SSE events
+- Persisted run details, history, and JSON export
+- Responsive React 19 + TypeScript diagnostic dashboard
 - Docker Compose for database-only or full-stack development
 - Backend and frontend test, lint, typecheck, race, and build checks
 
@@ -45,12 +51,12 @@ process.
 
 ## Technology
 
-| Layer | Stack |
-| --- | --- |
-| API | Go 1.26.5, net/http, chi, slog |
-| Data | PostgreSQL 18.4, pgx/pgxpool |
-| Web | Node.js 24 LTS, React, TypeScript, Vite, TanStack Query |
-| Delivery | Docker, Docker Compose, GitHub Actions |
+| Layer    | Stack                                                   |
+| -------- | ------------------------------------------------------- |
+| API      | Go 1.26.5, net/http, chi, slog                          |
+| Data     | PostgreSQL 18.4, pgx/pgxpool                            |
+| Web      | Node.js 24 LTS, React, TypeScript, Vite, TanStack Query |
+| Delivery | Docker, Docker Compose, GitHub Actions                  |
 
 ## Quick start
 
@@ -112,9 +118,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the complete workflow.
 
 ## Known limitations
 
-The bootstrap release exposes health/readiness endpoints and the UI shell. DNS,
-TCP, HTTP, TLS, SSE, saved runs, and exports belong to the v0.1.0 milestone.
-Public SSRF policy enforcement must be complete before internet deployment.
+The v0.1.0 release implements the four core probes. ICMP ping and traceroute
+remain intentionally disabled until v0.2.0 because their permission and
+platform models differ. NetScope has no authentication yet, so a public
+deployment still requires an external access-control layer.
 
 ## Roadmap
 
@@ -126,4 +133,3 @@ Public SSRF policy enforcement must be complete before internet deployment.
 ## License
 
 [MIT](LICENSE)
-

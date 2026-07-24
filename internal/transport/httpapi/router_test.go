@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/XxKotfeJxX/netscope/internal/target"
 )
 
 func TestHealthz(t *testing.T) {
@@ -27,5 +29,29 @@ func TestHealthz(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), `"version":"test"`) {
 		t.Fatalf("response = %q, want version", response.Body.String())
+	}
+}
+
+func TestAPIErrorDoesNotExposeInternalDetails(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/runs", nil)
+	request.Header.Set("X-Request-ID", "request-123")
+	response := httptest.NewRecorder()
+
+	writeAPIError(response, request, target.ErrAddressBlocked)
+
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusForbidden)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, `"code":"target_blocked"`) {
+		t.Fatalf("response = %q, want target_blocked", body)
+	}
+	if !strings.Contains(body, `"requestId":"request-123"`) {
+		t.Fatalf("response = %q, want request ID", body)
+	}
+	if strings.Contains(body, target.ErrAddressBlocked.Error()) {
+		t.Fatalf("response exposed internal error: %q", body)
 	}
 }
