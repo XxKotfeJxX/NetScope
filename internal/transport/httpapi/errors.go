@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
 	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
@@ -106,6 +107,23 @@ func writeAPIError(w http.ResponseWriter, r *http.Request, err error) {
 		status = http.StatusNotFound
 		code = "workspace_not_found"
 		message = "The workspace was not found."
+	case errors.Is(err, identity.ErrUserNotFound),
+		errors.Is(err, collaboration.ErrMemberMissing):
+		status = http.StatusNotFound
+		code = "workspace_member_not_found"
+		message = "The registered account is not a member of this workspace."
+	case errors.Is(err, collaboration.ErrInvalidInput):
+		status = http.StatusBadRequest
+		code = "invalid_collaboration_input"
+		message = err.Error()
+	case errors.Is(err, collaboration.ErrMemberExists):
+		status = http.StatusConflict
+		code = "workspace_member_exists"
+		message = "That account is already a workspace member."
+	case errors.Is(err, collaboration.ErrLastOwner):
+		status = http.StatusConflict
+		code = "last_workspace_owner"
+		message = "Assign another owner before changing or removing the last owner."
 	}
 
 	writeJSON(w, status, errorEnvelope{Error: apiError{

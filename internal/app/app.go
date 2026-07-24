@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/XxKotfeJxX/netscope/internal/collaboration"
 	"github.com/XxKotfeJxX/netscope/internal/diagnostics"
 	"github.com/XxKotfeJxX/netscope/internal/identity"
 	"github.com/XxKotfeJxX/netscope/internal/monitoring"
@@ -104,6 +105,9 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		identity.NewPasswordHasher(identity.DefaultPasswordParams()),
 		cfg.SessionTTL,
 	)
+	collaborationService := collaboration.NewService(
+		postgres.NewCollaborationRepository(pool),
+	)
 	webhookSender := monitoring.NewWebhookSender(
 		secureDialer,
 		cfg.NotificationTimeout,
@@ -141,6 +145,7 @@ func New(ctx context.Context, cfg Config, logger *slog.Logger) (*App, error) {
 		Events:              events,
 		Monitoring:          monitoringService,
 		Identity:            identityService,
+		Collaboration:       collaborationService,
 		SessionCookieSecure: cfg.SessionCookieSecure,
 		Checks: map[string]httpapi.Capability{
 			"dns": {Available: true}, "tcp": {Available: true},

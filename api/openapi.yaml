@@ -197,6 +197,120 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /api/v1/workspace/members:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceMembers
+      summary: List members of the active workspace
+      responses:
+        "200":
+          description: Workspace members ordered by privilege and name
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkspaceMember"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [Workspaces]
+      operationId: addWorkspaceMember
+      summary: Add a registered account to the active workspace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddWorkspaceMember"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspace/members/{userID}:
+    parameters:
+      - $ref: "#/components/parameters/WorkspaceHeader"
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    patch:
+      tags: [Workspaces]
+      operationId: updateWorkspaceMemberRole
+      summary: Change a workspace member role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/Role"
+      responses:
+        "200":
+          description: Member role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkspaceMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Workspaces]
+      operationId: removeWorkspaceMember
+      summary: Remove an account from the active workspace
+      responses:
+        "204":
+          description: Member removed
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /api/v1/workspace/audit:
+    get:
+      tags: [Workspaces]
+      operationId: listWorkspaceAudit
+      summary: List immutable workspace control-plane events
+      parameters:
+        - $ref: "#/components/parameters/WorkspaceHeader"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: Audit event page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditPage"
+        "403":
+          $ref: "#/components/responses/Forbidden"
   /api/v1/runs:
     post:
       tags: [Runs]
@@ -617,6 +731,21 @@ components:
       schema:
         type: string
         format: uuid
+    Page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      in: query
+      name: pageSize
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 50
   responses:
     BadRequest:
       description: Invalid target, options, or request body
@@ -632,6 +761,18 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
     Unauthorized:
       description: Authentication is required or the session is invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: The active workspace role does not permit this action
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Conflict:
+      description: The requested change conflicts with workspace state
       content:
         application/json:
           schema:
@@ -680,6 +821,75 @@ components:
         updatedAt:
           type: string
           format: date-time
+    WorkspaceMember:
+      type: object
+      required: [userId, email, displayName, role, joinedAt]
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        role:
+          $ref: "#/components/schemas/Role"
+        joinedAt:
+          type: string
+          format: date-time
+    AddWorkspaceMember:
+      type: object
+      required: [email, role]
+      properties:
+        email:
+          type: string
+          format: email
+        role:
+          $ref: "#/components/schemas/Role"
+    AuditEvent:
+      type: object
+      required:
+        [id, workspaceId, actorUserId, action, resourceType, metadata, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        workspaceId:
+          type: string
+          format: uuid
+        actorUserId:
+          type: string
+          format: uuid
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+          format: uuid
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+    AuditPage:
+      type: object
+      required: [items, page, pageSize, totalItems, totalPages]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEvent"
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        totalItems:
+          type: integer
+        totalPages:
+          type: integer
     RegistrationInput:
       type: object
       required: [email, password, displayName]
