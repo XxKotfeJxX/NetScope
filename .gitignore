@@ -16,6 +16,8 @@ coverage.out
 *.test
 netscope
 netscope.exe
+demo-seed
+demo-seed.exe
 
 # Frontend
 web/node_modules/
