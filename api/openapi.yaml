@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: NetScope API
-  version: 0.4.0-dev
+  version: 0.4.0
   description: Concurrent network diagnostics and scheduled monitoring API.
   license:
     name: MIT
