@@ -35,7 +35,7 @@ jobs:
       DATABASE_URL: postgres://netscope:netscope@localhost:5432/netscope_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version: "1.26.5"
           cache: true
